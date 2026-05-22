@@ -591,9 +591,14 @@
     const skippedTables = Number(warnings.tables || 0);
     if (skippedImages || skippedTables) {
       const parts = [];
-      if (skippedImages) parts.push(`${skippedImages} image(s) kept as Markdown links`);
+      if (skippedImages) {
+        parts.push(`${skippedImages} web image(s) stayed as Markdown links`);
+      }
       if (skippedTables) parts.push(`${skippedTables} table(s) kept as Markdown`);
-      return `Article written${elapsed}. ${parts.join("; ")}.`;
+      const recovery = skippedImages
+        ? " Allow the image website in xPoster, then write again to upload them."
+        : "";
+      return `Article written${elapsed}. ${parts.join("; ")}.${recovery}`;
     }
     return `Article written${elapsed}.`;
   }

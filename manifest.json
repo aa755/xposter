@@ -48,6 +48,10 @@
     "https://x.com/*",
     "https://twitter.com/*"
   ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "permissions": [
     "storage",
     "sidePanel",

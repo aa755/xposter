@@ -807,7 +807,7 @@ h2 {
 .composer {
   position: relative;
   min-height: min(680px, calc(100dvh - 146px));
-  grid-template-rows: auto auto minmax(300px, 1fr) auto auto auto;
+  grid-template-rows: auto auto auto minmax(300px, 1fr) auto auto auto;
   border: 1px solid var(--line);
   background: rgba(251, 250, 247, 0.86);
   transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
@@ -822,17 +822,70 @@ h2 {
 .composer.drag-active::after {
   content: attr(data-drop-label);
   position: absolute;
-  inset: 58px 12px 44px;
+  inset: 104px 12px 54px;
   z-index: 2;
   display: grid;
   place-items: center;
   border: 2px dashed color-mix(in oklch, var(--signal), var(--paper) 12%);
-  background: color-mix(in oklch, var(--paper), var(--signal) 8%);
+  background: color-mix(in oklch, var(--paper), var(--signal) 10%);
   color: var(--signal);
   font-size: 13px;
   font-weight: 840;
   text-transform: uppercase;
   pointer-events: none;
+}
+
+.drop-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-bottom: 1px solid color-mix(in oklch, var(--line), transparent 35%);
+  background: var(--paper);
+  color: var(--muted);
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.drop-status strong {
+  flex: 0 0 auto;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 840;
+  line-height: 1.2;
+}
+
+.drop-status span {
+  min-width: 0;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.32;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.drop-status[data-tone="ready"] {
+  background: color-mix(in oklch, var(--signal), var(--paper) 90%);
+  color: var(--signal);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--signal), transparent 68%);
+}
+
+.drop-status[data-tone="done"] {
+  background: color-mix(in oklch, #3f6f42, var(--paper) 91%);
+  color: #3f6f42;
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, #3f6f42, transparent 76%);
+}
+
+.drop-status[data-tone="error"] {
+  background: color-mix(in oklch, var(--danger), var(--paper) 91%);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--danger), transparent 76%);
+}
+
+.composer.drag-active .drop-status {
+  background: var(--signal);
+  color: var(--signal-ink);
 }
 
 .composer-head {
@@ -1298,6 +1351,12 @@ textarea::placeholder {
 
 .remote-permission-actions .secondary {
   flex: 1 1 150px;
+}
+
+.remote-permission-actions .secondary:first-child:not(:disabled) {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: var(--signal-ink);
 }
 
 .remote-permission-list {
@@ -2657,6 +2716,29 @@ textarea::placeholder {
   gap: 7px 12px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.summary-message {
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: 1px solid color-mix(in oklch, var(--line), transparent 22%);
+  background: color-mix(in oklch, var(--paper-2), var(--paper) 70%);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+}
+
+.summary-message[data-tone="done"] {
+  border-color: color-mix(in oklch, var(--signal), var(--line) 48%);
+  background: color-mix(in oklch, var(--signal), var(--paper) 92%);
+  color: color-mix(in oklch, var(--signal), var(--ink) 24%);
+}
+
+.summary-message[data-tone="warn"] {
+  border-color: color-mix(in oklch, var(--warn), var(--line) 46%);
+  background: color-mix(in oklch, var(--warn), var(--paper) 91%);
+  color: color-mix(in oklch, var(--warn), var(--ink) 26%);
 }
 
 .summary-grid strong {

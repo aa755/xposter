@@ -143,6 +143,10 @@
           <strong>Paste Markdown or drop a file here</strong>
           <span>Write in MacDown, Obsidian, Typora, or any Markdown editor. xPoster writes this draft into the current or new X Article.</span>
         </div>
+        <div class="drop-status" id="draftDropStatus" data-tone="idle" aria-live="polite">
+          <strong>Ready for Markdown</strong>
+          <span>Drop a .md file or paste text into the editor below.</span>
+        </div>
         <textarea id="markdown" spellcheck="false" placeholder="# Article title&#10;&#10;Paste your Markdown here."></textarea>
 
         <section class="live-progress main-progress" id="liveProgress" aria-label="Article writing progress" data-tone="idle" hidden>
@@ -191,7 +195,7 @@
 
       <section class="remote-permissions" id="remotePermissionPanel" aria-label="Remote image access" data-tone="idle" hidden>
         <div>
-          <h2>Web images can upload after one Chrome approval</h2>
+          <h2>Web images stayed as links?</h2>
           <p id="remotePermissionMeta">No remote image URLs detected.</p>
         </div>
         <ol class="remote-permission-steps" id="remotePermissionSteps" aria-label="Remote image steps">
@@ -201,11 +205,11 @@
           </li>
           <li data-remote-step="check" data-tone="idle">
             <strong>2</strong>
-            <span>Check images</span>
+            <span>Try upload</span>
           </li>
           <li data-remote-step="import" data-tone="idle">
             <strong>3</strong>
-            <span>Import</span>
+            <span>Write again</span>
           </li>
         </ol>
         <ol id="remotePermissionList" class="remote-permission-list">
@@ -216,12 +220,12 @@
         </ol>
         <div class="remote-explainer" aria-label="Why Chrome asks for image website access">
           <p><strong>Why:</strong> these Markdown images live on another website.</p>
-          <p><strong>What to do next:</strong> click Allow image website, then Check downloads.</p>
-          <p><strong>Limit:</strong> xPoster only reads this image site and never publishes for you.</p>
+          <p><strong>Option:</strong> allow that image website, then write again so xPoster can upload them.</p>
+          <p><strong>Fallback:</strong> if Chrome still cannot read them, xPoster keeps the Markdown links in the article.</p>
         </div>
         <div class="remote-permission-actions" id="remotePermissionActions">
           <button class="secondary compact" id="allowRemoteImages" type="button">Allow image website</button>
-          <button class="secondary compact" id="checkRemoteImages" type="button" disabled>Check downloads</button>
+          <button class="secondary compact" id="checkRemoteImages" type="button" disabled>Try image upload</button>
         </div>
       </section>
 
@@ -232,6 +236,7 @@
         </div>
         <section class="run-summary" id="runSummary" hidden>
           <h2>Last import</h2>
+          <p id="summaryMessage" class="summary-message">No import has run yet.</p>
           <div class="summary-grid">
             <span>Images</span><strong id="summaryImages">0 / 0</strong>
             <span>Embeds and code</span><strong id="summaryBlocks">0 / 0</strong>
