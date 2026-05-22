@@ -30,6 +30,7 @@ const requiredFiles = [
   "docs/usage.zh-CN.md",
   "docs/privacy.md",
   "docs/privacy.zh-CN.md",
+  "docs/images/buy-me-a-coffee-qr.png",
   "assets/icon-16.png",
   "assets/icon-32.png",
   "assets/icon-48.png",
@@ -91,6 +92,14 @@ assert.ok(
 assert.ok(readmeZh.includes("Chrome Web Store"), "Chinese README should mention Chrome Web Store");
 assert.ok(usageZh.includes("添加至 Chrome"), "Chinese usage guide should explain store installation");
 assert.ok(readmeZh.includes("https://x.com/xiaoxiaodong01"), "Chinese README should include author contact");
+assert.ok(
+  readme.includes("docs/images/buy-me-a-coffee-qr.png"),
+  "English README should include the support QR code"
+);
+assert.ok(
+  readmeZh.includes("docs/images/buy-me-a-coffee-qr.png"),
+  "Chinese README should include the support QR code"
+);
 assert.ok(
   !/https:\/\/[^\s"']*cos\.ap-guangzhou\.myqcloud\.com/.test(allPublicText),
   "private image host must not be exposed"

@@ -109,6 +109,12 @@ xPoster 是一个把 Markdown 草稿导入 X Articles 的 Chrome 扩展。
 
 可以通过作者 X 主页联系：[@xiaoxiaodong01](https://x.com/xiaoxiaodong01)。
 
+## 支持作者
+
+xPoster 会继续保持免费开源。如果它帮你节省了整理和发布长文的时间，也愿意支持后续维护，可以扫描下面的 Buy Me a Coffee 二维码请作者喝杯咖啡。完全自愿；反馈、Star 和 issue 同样很有帮助。
+
+<img src="docs/images/buy-me-a-coffee-qr.png" alt="Buy Me a Coffee 支持二维码" width="220">
+
 ## 开源协议
 
 MIT。见 [LICENSE](LICENSE)。

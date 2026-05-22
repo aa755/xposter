@@ -135,6 +135,12 @@ Open an issue with your Chrome version, xPoster version, and the diagnostics JSO
 
 Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Support
+
+xPoster is free and open source. If it saves you time and you want to support ongoing maintenance, you can scan the Buy Me a Coffee QR code below. This is completely optional; feedback, issues, and stars also help the project.
+
+<img src="docs/images/buy-me-a-coffee-qr.png" alt="Buy Me a Coffee QR code" width="220">
+
 ## Contact
 
 Contact the author on X: [@xiaoxiaodong01](https://x.com/xiaoxiaodong01).
