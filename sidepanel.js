@@ -54,6 +54,10 @@
     importLedgerList: document.getElementById("importLedgerList"),
     recordsPanel: document.getElementById("recordsPanel"),
     recordsEmpty: document.getElementById("recordsEmpty"),
+    recordHistory: document.getElementById("recordHistory"),
+    recordHistoryMeta: document.getElementById("recordHistoryMeta"),
+    recordHistoryList: document.getElementById("recordHistoryList"),
+    clearRecordHistory: document.getElementById("clearRecordHistory"),
     reviewMeta: document.getElementById("reviewMeta"),
     reviewList: document.getElementById("reviewList"),
     importDraft: document.getElementById("importDraft"),
@@ -134,6 +138,8 @@
   const STORAGE_DRAFT = "xposter_sidepanel_draft";
   const STORAGE_LIVE_RESULT = "xposter_live_result_checks";
   const STORAGE_LANGUAGE = "xposter_language";
+  const STORAGE_RECORD_HISTORY = "xposter_publish_record_history";
+  const MAX_RECORD_HISTORY = 30;
   const EXTENSION_VERSION =
     typeof chrome !== "undefined" && chrome.runtime?.getManifest
       ? chrome.runtime.getManifest().version
@@ -233,6 +239,7 @@ console.log("示例代码块");
   let latestPageStatus = null;
   let latestDiagnostics = null;
   let latestEvidence = null;
+  let recordHistory = [];
   let liveResultChecks = {};
   let currentNextAction = null;
   let targetLock = null;
@@ -473,11 +480,29 @@ console.log("示例代码块");
       Preview: "预览",
       Pending: "待发布",
       "Publish records": "发布记录",
+      "Publish history": "发布历史",
       Verify: "验证",
       Records: "记录",
       Settings: "设置",
       "No publish record yet": "还没有发布记录",
       "Write a Markdown draft into X Article. The latest result and activity will appear here.": "把 Markdown 草稿写入 X 文章后，这里会显示最近结果和动态。",
+      "No saved records yet.": "还没有保存记录。",
+      "Write or check an article to create the first record.": "写入或检查文章后会生成第一条记录。",
+      "local record(s), newest first.": "条本地记录，最新在前。",
+      Written: "已写入",
+      Failed: "失败",
+      Blocked: "已阻断",
+      "Check found blockers": "检查发现阻断项",
+      Saved: "已保存",
+      Kind: "类型",
+      Target: "目标",
+      Images: "图片",
+      Title: "标题",
+      Cover: "封面",
+      "Not run": "未运行",
+      "Target not locked": "未锁定目标",
+      "No image upload result": "没有图片上传结果",
+      "Publish records cleared.": "发布记录已清空。",
       "Markdown draft": "Markdown 草稿",
       "Choose Markdown file": "选择 Markdown 文件",
       "Load live smoke fixture": "加载实时烟测草稿",
@@ -1375,6 +1400,7 @@ console.log("示例代码块");
       [/^(\d+)\/(\d+) stage\(s\) complete$/, "$1/$2 个阶段完成"],
       [/^(\d+) blocker\(s\), (\d+)\/(\d+) proven$/, "$1 个阻塞项，$2/$3 已证明"],
       [/^(\d+) pending item\(s\), (\d+)\/(\d+) proven$/, "$1 个待处理项，$2/$3 已证明"],
+      [/^(\d+) local record\(s\), newest first\.$/, "$1 条本地记录，最新在前。"],
       [/^(\d+) live event\(s\); import complete\.$/, "$1 个实时事件；导入完成。"],
       [/^(\d+) live event\(s\); import failed\.$/, "$1 个实时事件；导入失败。"],
       [/^(\d+) live event\(s\); import in progress\.$/, "$1 个实时事件；导入中。"],
@@ -1393,6 +1419,8 @@ console.log("示例代码块");
       [/^(\d+) upload item need X handler\.$/, "$1 个上传项需要 X 处理器。"],
       [/^(\d+) upload items ready\.$/, "$1 个上传项就绪。"],
       [/^(\d+) upload item ready\.$/, "$1 个上传项就绪。"],
+      [/^(\d+) image\(s\) ready, (\d+) need attention$/, "$1 张图片已就绪，$2 张需要处理"],
+      [/^(\d+) image\(s\) uploaded$/, "$1 张图片已上传"],
       [/^(\d+) upload items need the X editor\.$/, "$1 个上传项需要 X 编辑器。"],
       [/^(\d+) upload item need the X editor\.$/, "$1 个上传项需要 X 编辑器。"],
       [/^(\d+) media upload item\(s\) can use X upload handler\.$/, "$1 个媒体上传项可使用 X 上传能力。"],
@@ -1556,6 +1584,7 @@ console.log("示例代码块");
       [/^(\d+) 个阶段阻塞，(\d+) 个完成$/, "$1 blocked stage(s), $2 complete"],
       [/^(\d+) 个阻塞项，(\d+)\/(\d+) 已证明$/, "$1 blocker(s), $2/$3 proven"],
       [/^(\d+) 个待处理项，(\d+)\/(\d+) 已证明$/, "$1 pending item(s), $2/$3 proven"],
+      [/^(\d+) 条本地记录，最新在前。$/, "$1 local record(s), newest first."],
       [/^(\d+) 个实时事件；导入完成。$/, "$1 live event(s); import complete."],
       [/^(\d+) 个实时事件；导入失败。$/, "$1 live event(s); import failed."],
       [/^(\d+) 个实时事件；导入中。$/, "$1 live event(s); import in progress."],
@@ -1563,6 +1592,8 @@ console.log("示例代码块");
       [/^(\d+) 个块，已检测标题$/, "$1 blocks, titled"],
       [/^(\d+) 个上传项需要 X 处理器。$/, "$1 upload items need X handler."],
       [/^(\d+) 个上传项就绪。$/, "$1 upload items ready."],
+      [/^(\d+) 张图片已就绪，(\d+) 张需要处理$/, "$1 image(s) ready, $2 need attention"],
+      [/^(\d+) 张图片已上传$/, "$1 image(s) uploaded"],
       [/^还有 (\d+) 个导入项$/, "$1 more import item(s)"],
       [/^还有 (\d+) 个账本项$/, "$1 more ledger item(s)"],
       [/^另有 (\d+) 个特殊内容步骤已隐藏。$/, "$1 additional special-content step(s) hidden."],
@@ -4591,14 +4622,14 @@ console.log("示例代码块");
 
   function syncRecordPanel() {
     if (!els.recordsPanel) return;
-    const nodes = [els.runSummary, els.evidenceDetails, els.activityPanel].filter(Boolean);
+    const nodes = [els.runSummary, els.recordHistory, els.evidenceDetails, els.activityPanel].filter(Boolean);
     for (const node of nodes) {
       if (node.parentElement !== els.recordsPanel) els.recordsPanel.appendChild(node);
     }
     for (const node of [els.verificationPanel, els.liveResultPanel]) {
       if (node) node.hidden = true;
     }
-    const hasRecord = nodes.some((node) => !node.hidden);
+    const hasRecord = recordHistory.length || nodes.some((node) => !node.hidden);
     if (els.recordsEmpty) els.recordsEmpty.hidden = hasRecord;
     translateDynamicDom(els.recordsPanel);
   }
@@ -5452,6 +5483,7 @@ console.log("示例代码块");
       liveProgress: buildLiveProgressEvidence(),
       ...payload
     };
+    addRecordHistoryEntry(latestEvidence);
     els.evidenceMeta.textContent = `${kind} captured ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     els.evidenceText.textContent = JSON.stringify(latestEvidence, jsonSafeReplacer, 2);
     els.copyEvidence.disabled = false;
@@ -5465,6 +5497,158 @@ console.log("示例代码块");
     updateRecoveryPanel(checks, gate);
     updateTargetContextPanel();
     translateDynamicDom();
+  }
+
+  function addRecordHistoryEntry(evidence) {
+    if (!evidence) return;
+    const entry = normalizeRecordHistoryEntry(evidence);
+    recordHistory = [entry, ...recordHistory.filter((item) => item.id !== entry.id)].slice(0, MAX_RECORD_HISTORY);
+    persistRecordHistory();
+    renderRecordHistory();
+  }
+
+  function normalizeRecordHistoryEntry(evidence) {
+    const summary = evidence.result?.summary || evidence.liveProgress?.summary || null;
+    const main = summary?.main || evidence.result?.summary?.main || {};
+    const title = evidence.draft?.title || summary?.title || "Untitled draft";
+    const kind = String(evidence.kind || "record");
+    const capturedAt = evidence.capturedAt || new Date().toISOString();
+    const imageOk = Number(summary?.images?.ok || 0);
+    const imageFail = Number(summary?.images?.fail || 0);
+    const uploadFail = Number(main?.imgFail || 0);
+    const warnings = Number(summary?.mediaWarnings?.total || 0) + uploadFail;
+    const target = evidence.targetContext || {};
+    return {
+      id: `${capturedAt}-${kind}-${Math.random().toString(36).slice(2, 8)}`,
+      kind,
+      capturedAt,
+      title,
+      status: recordStatusForEvidence(evidence),
+      tone: recordToneForEvidence(evidence),
+      articleId: target.articleId || main?.title?.articleId || null,
+      route: target.route || null,
+      images: {
+        ok: imageOk,
+        fail: imageFail,
+        warnings
+      },
+      titleResult: summarizeTitleResult(main?.title),
+      coverResult: summarizeCoverResult(main?.cover),
+      elapsedMs: summary?.elapsedMs || null,
+      blockers: Array.isArray(evidence.checks) ? evidence.checks.filter((check) => check.tone === "error").length : 0,
+      remoteImages: evidence.draft?.remoteImages || null,
+      evidence
+    };
+  }
+
+  function recordStatusForEvidence(evidence) {
+    if (evidence.kind === "import") return "Written";
+    if (evidence.kind === "import-error") return "Failed";
+    if (evidence.kind === "preflight-blocked" || evidence.kind?.includes("blocked")) return "Blocked";
+    if (evidence.kind === "preflight") {
+      const blockers = Array.isArray(evidence.checks) ? evidence.checks.filter((check) => check.tone === "error").length : 0;
+      return blockers ? "Check found blockers" : "Check passed";
+    }
+    if (evidence.kind?.includes("remote-image")) return "Image check";
+    return "Saved";
+  }
+
+  function recordToneForEvidence(evidence) {
+    if (evidence.kind === "import") return "ok";
+    if (evidence.kind === "import-error" || evidence.kind === "preflight-blocked" || evidence.kind?.includes("blocked")) return "error";
+    if (evidence.kind?.includes("remote-image")) return evidence.kind.includes("check") && !evidence.kind.includes("blocked") ? "ok" : "warn";
+    const blockers = Array.isArray(evidence.checks) ? evidence.checks.filter((check) => check.tone === "error").length : 0;
+    return blockers ? "warn" : "ok";
+  }
+
+  function persistRecordHistory() {
+    if (!hasChromeApi()) return;
+    Promise.resolve(chrome.storage.local.set({ [STORAGE_RECORD_HISTORY]: recordHistory })).catch(() => {});
+  }
+
+  async function restoreRecordHistory() {
+    if (!hasChromeApi()) {
+      renderRecordHistory();
+      return;
+    }
+    const stored = await chrome.storage.local.get(STORAGE_RECORD_HISTORY).catch(() => ({}));
+    recordHistory = Array.isArray(stored[STORAGE_RECORD_HISTORY]) ? stored[STORAGE_RECORD_HISTORY].slice(0, MAX_RECORD_HISTORY) : [];
+    latestEvidence = recordHistory[0]?.evidence || latestEvidence;
+    if (latestEvidence) {
+      els.evidenceMeta.textContent = `${latestEvidence.kind} captured ${new Date(latestEvidence.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      els.evidenceText.textContent = JSON.stringify(latestEvidence, jsonSafeReplacer, 2);
+      els.copyEvidence.disabled = false;
+    }
+    renderRecordHistory();
+    updateProgressiveSections();
+  }
+
+  function renderRecordHistory() {
+    if (!els.recordHistoryList) return;
+    const total = recordHistory.length;
+    if (els.recordHistory) els.recordHistory.hidden = false;
+    if (els.recordHistoryMeta) {
+      els.recordHistoryMeta.textContent = total
+        ? `${total} local record(s), newest first.`
+        : "No saved records yet.";
+    }
+    if (els.clearRecordHistory) els.clearRecordHistory.disabled = total === 0;
+    if (!total) {
+      els.recordHistoryList.innerHTML = `<li class="record-history-empty">Write or check an article to create the first record.</li>`;
+      syncRecordPanel();
+      return;
+    }
+    els.recordHistoryList.innerHTML = recordHistory.map(renderRecordHistoryItem).join("");
+    translateDynamicDom(els.recordHistory);
+    syncRecordPanel();
+  }
+
+  function renderRecordHistoryItem(record) {
+    const safe = shared.escapeHtml;
+    const captured = new Date(record.capturedAt);
+    const time = Number.isNaN(captured.getTime())
+      ? record.capturedAt
+      : captured.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const imageText = record.images.warnings
+      ? `${record.images.ok} image(s) ready, ${record.images.warnings} need attention`
+      : record.images.ok || record.images.fail
+        ? `${record.images.ok} image(s) uploaded`
+        : "No image upload result";
+    const targetText = record.articleId ? `Article ${record.articleId}` : record.route ? `Target: ${record.route}` : "Target not locked";
+    return `
+      <li class="record-history-item" data-tone="${safe(record.tone)}">
+        <details>
+          <summary>
+            <span class="record-status">${safe(record.status)}</span>
+            <span class="record-title">${safe(record.title)}</span>
+            <time>${safe(time)}</time>
+          </summary>
+          <div class="record-history-body">
+            <dl>
+              <div><dt>Kind</dt><dd>${safe(record.kind)}</dd></div>
+              <div><dt>Target</dt><dd>${safe(targetText)}</dd></div>
+              <div><dt>Images</dt><dd>${safe(imageText)}</dd></div>
+              <div><dt>Title</dt><dd>${safe(record.titleResult)}</dd></div>
+              <div><dt>Cover</dt><dd>${safe(record.coverResult)}</dd></div>
+              <div><dt>Elapsed</dt><dd>${safe(record.elapsedMs ? `${(record.elapsedMs / 1000).toFixed(1)}s` : "Not run")}</dd></div>
+            </dl>
+            <pre>${safe(JSON.stringify(record.evidence, jsonSafeReplacer, 2))}</pre>
+          </div>
+        </details>
+      </li>
+    `;
+  }
+
+  async function clearRecordHistory() {
+    recordHistory = [];
+    latestEvidence = null;
+    if (hasChromeApi()) await chrome.storage.local.remove(STORAGE_RECORD_HISTORY).catch(() => {});
+    els.evidenceMeta.textContent = "No local record saved yet.";
+    els.evidenceText.textContent = "Write an article to save a local record.";
+    els.copyEvidence.disabled = true;
+    renderRecordHistory();
+    updateProgressiveSections();
+    log("Publish records cleared.");
   }
 
   function buildProofDeckEvidence(checks = null, gate = null) {
@@ -5911,6 +6095,7 @@ console.log("示例代码块");
   els.copyExtensionPath.addEventListener("click", copyExtensionPath);
   els.copyProofDeck.addEventListener("click", copyProofDeck);
   els.resetLiveResult.addEventListener("click", resetLiveResultChecks);
+  els.clearRecordHistory?.addEventListener("click", clearRecordHistory);
   els.focusRunbook.addEventListener("click", () => {
     jumpToSection("verify");
     log("Live verification runbook focused.");
@@ -5951,6 +6136,7 @@ console.log("示例代码块");
 
   restoreDraft();
   restoreVaultState();
+  restoreRecordHistory();
   restoreLiveResultChecks();
   updateLiveProgress();
   refreshPageState();

@@ -2653,6 +2653,7 @@ textarea::placeholder {
 
 .records,
 .run-summary,
+.record-history,
 .live-result,
 .live-runbook,
 .proof-deck,
@@ -2707,6 +2708,136 @@ textarea::placeholder {
 
 .records > .diagnostics-details {
   display: block;
+}
+
+.record-history {
+  display: grid;
+  gap: 10px;
+}
+
+.record-history-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record-history-empty {
+  padding: 12px;
+  border: 1px dashed color-mix(in oklch, var(--line), transparent 10%);
+  background: color-mix(in oklch, var(--paper-2), var(--paper) 72%);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.38;
+}
+
+.record-history-item {
+  border: 1px solid color-mix(in oklch, var(--line), transparent 16%);
+  background: color-mix(in oklch, var(--paper-2), var(--paper) 78%);
+}
+
+.record-history-item[data-tone="ok"] {
+  border-color: color-mix(in oklch, var(--signal), var(--line) 52%);
+}
+
+.record-history-item[data-tone="warn"] {
+  border-color: color-mix(in oklch, var(--warn), var(--line) 45%);
+}
+
+.record-history-item[data-tone="error"] {
+  border-color: color-mix(in oklch, var(--danger), var(--line) 45%);
+}
+
+.record-history-item details {
+  display: grid;
+}
+
+.record-history-item summary {
+  display: grid;
+  grid-template-columns: minmax(80px, auto) minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-height: 42px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.record-history-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.record-status {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 820;
+  line-height: 1.2;
+}
+
+.record-title {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-history-item time {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.record-history-body {
+  display: grid;
+  gap: 9px;
+  padding: 0 10px 10px;
+}
+
+.record-history-body dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+
+.record-history-body dl div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid color-mix(in oklch, var(--line), transparent 22%);
+  background: var(--paper);
+}
+
+.record-history-body dt {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.record-history-body dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.record-history-body pre {
+  margin: 0;
+  max-height: 210px;
+  overflow: auto;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  background: color-mix(in oklch, var(--paper), var(--ink) 4%);
+  color: var(--muted);
+  font: 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .summary-grid {
