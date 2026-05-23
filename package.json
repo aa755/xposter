@@ -13,7 +13,7 @@
     "publishing"
   ],
   "scripts": {
-    "check": "node --check src/background.js && node --check src/content.js && node --check src/main-world.js && node --check src/shared.js && node --check sidepanel.js && node --check diagnostics.js && jq empty manifest.json",
+    "check": "node --check src/background.js && node --check src/content.js && node --check src/main-world.js && node --check src/shared.js && node --check src/i18n.js && node --check sidepanel.js && node --check diagnostics.js && jq empty manifest.json && node scripts/check-i18n.js",
     "test": "node scripts/smoke-test.js",
     "verify": "npm run check && npm test"
   },

@@ -1,5 +1,6 @@
 const STORAGE_LANGUAGE = "xposter_language";
 const COPY_FEEDBACK_MS = 1000;
+const i18n = window.xPosterI18n;
 
 const els = {
   run: document.getElementById("run"),
@@ -162,6 +163,8 @@ const TEXT = {
   }
 };
 
+i18n?.registerMessages(TEXT);
+
 const SUMMARY_LABELS = [
   ["target", "summaryTarget"],
   ["route", "summaryRoute"],
@@ -175,7 +178,7 @@ const SUMMARY_LABELS = [
 ];
 
 let latestResult = null;
-let currentLanguage = preferredLanguage();
+let currentLanguage = i18n?.preferredLanguage?.() || preferredLanguage();
 
 function hasChromeRuntime() {
   return typeof chrome !== "undefined" && Boolean(chrome.runtime?.sendMessage);
@@ -186,28 +189,38 @@ function hasChromeStorage() {
 }
 
 function preferredLanguage() {
-  return /^zh\b/i.test(navigator.language || "") ? "zh" : "en";
+  return i18n?.preferredLanguage?.() || (/^zh\b/i.test(navigator.language || "") ? "zh" : "en");
 }
 
 function language() {
-  return currentLanguage === "zh" ? "zh" : "en";
+  return i18n?.language?.() || (currentLanguage === "zh" ? "zh" : "en");
 }
 
 function t(key, values = {}) {
+  if (i18n) return i18n.t(key, values);
   const source = TEXT[language()][key] || TEXT.en[key] || key;
   return source.replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
 }
 
 function setText(element, key, values = {}) {
-  if (element) element.textContent = t(key, values);
+  if (i18n) i18n.setText(element, key, values);
+  else if (element) element.textContent = t(key, values);
 }
 
 function setLanguage(nextLanguage) {
-  currentLanguage = nextLanguage === "zh" ? "zh" : "en";
+  currentLanguage = i18n?.normalizeLanguage?.(nextLanguage) || (nextLanguage === "zh" ? "zh" : "en");
+  if (i18n && i18n.language() !== currentLanguage) {
+    i18n.setLanguage(currentLanguage, { persist: false, render: false });
+  }
   renderLanguage();
 }
 
 async function restoreLanguage() {
+  if (i18n) {
+    currentLanguage = await i18n.restoreLanguage({ render: false });
+    renderLanguage();
+    return;
+  }
   if (!hasChromeStorage()) {
     renderLanguage();
     return;
@@ -447,6 +460,10 @@ function bindEvents() {
       setLanguage(changes[STORAGE_LANGUAGE].newValue || preferredLanguage());
     });
   }
+  window.addEventListener("xposter:i18n-language", (event) => {
+    currentLanguage = event.detail?.language || preferredLanguage();
+    renderLanguage();
+  });
 }
 
 async function init() {

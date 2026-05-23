@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "xPoster",
-  "description": "A refined Markdown publishing console for X Articles.",
+  "name": "__MSG_extension_name__",
+  "description": "__MSG_extension_description__",
   "version": "1.42.4",
+  "default_locale": "en",
   "minimum_chrome_version": "116",
   "action": {
-    "default_title": "xPoster",
+    "default_title": "__MSG_action_title__",
     "default_icon": {
       "16": "assets/icon-16.png",
       "32": "assets/icon-32.png",
@@ -65,6 +66,7 @@
   "web_accessible_resources": [
     {
       "resources": [
+        "src/i18n.js",
         "src/shared.js",
         "fixtures/live-x-smoke.md"
       ],

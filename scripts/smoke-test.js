@@ -8,9 +8,16 @@ const readJson = (relativePath) =>
 
 const manifest = readJson("manifest.json");
 const pkg = readJson("package.json");
+const defaultMessages = readJson("_locales/en/messages.json");
+const manifestMessage = (value) => {
+  const match = String(value || "").match(/^__MSG_([A-Za-z0-9_]+)__$/);
+  if (!match) return value;
+  return defaultMessages[match[1]]?.message || value;
+};
 
 assert.equal(manifest.manifest_version, 3, "manifest must be MV3");
-assert.equal(manifest.name, "xPoster", "manifest name must stay xPoster");
+assert.equal(manifest.default_locale, "en", "manifest must declare a default locale");
+assert.equal(manifestMessage(manifest.name), "xPoster", "manifest name must resolve to xPoster");
 assert.equal(pkg.version.replace(/\.0$/, ""), manifest.version, "package and manifest versions must match");
 
 const requiredFiles = [

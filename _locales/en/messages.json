@@ -1,0 +1,11 @@
+{
+  "extension_name": {
+    "message": "xPoster"
+  },
+  "extension_description": {
+    "message": "A refined Markdown publishing console for X Articles."
+  },
+  "action_title": {
+    "message": "xPoster"
+  }
+}

@@ -1,5 +1,6 @@
 (() => {
   const shared = window.xPosterShared;
+  const i18n = window.xPosterI18n;
   const IMPORT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v3H4V4Zm0 5h10v3H4V9Zm0 5h8v3H4v-3Zm13.5-.7V9h2v4.3l1.6-1.6 1.4 1.4-3.5 3.5-3.5-3.5 1.4-1.4 1.6 1.6ZM17 18h5v2h-5v-2Z"/></svg>';
   const els = {
     markdown: document.getElementById("markdown"),
@@ -54,6 +55,10 @@
     recordSearchInput: document.getElementById("recordSearchInput"),
     recordSearchSummary: document.getElementById("recordSearchSummary"),
     recordHistoryList: document.getElementById("recordHistoryList"),
+    recordEditSheet: document.getElementById("recordEditSheet"),
+    recordEditTitle: document.getElementById("recordEditTitle"),
+    recordEditMeta: document.getElementById("recordEditMeta"),
+    recordEditTextarea: document.getElementById("recordEditTextarea"),
     clearRecordHistory: document.getElementById("clearRecordHistory"),
     reviewMeta: document.getElementById("reviewMeta"),
     reviewList: document.getElementById("reviewList"),
@@ -125,6 +130,7 @@
     copyEvidencePackage: document.getElementById("copyEvidencePackage"),
     downloadEvidencePackage: document.getElementById("downloadEvidencePackage"),
     languageSelect: document.getElementById("languageSelect"),
+    themeChoice: document.getElementById("themeChoice"),
     extensionVersion: document.getElementById("extensionVersion"),
     settingsVersion: document.getElementById("settingsVersion"),
     activityPanel: document.getElementById("activityPanel")
@@ -133,9 +139,11 @@
   const STORAGE_DRAFT = "xposter_sidepanel_draft";
   const STORAGE_LIVE_RESULT = "xposter_live_result_checks";
   const STORAGE_LANGUAGE = "xposter_language";
+  const STORAGE_THEME = "xposter_theme";
   const STORAGE_RECORD_HISTORY = "xposter_publish_record_history";
   const MAX_RECORD_HISTORY = 30;
   const MAX_RECORD_MARKDOWN_CHARS = 120000;
+  const THEME_MODES = new Set(["system", "light", "dark"]);
   const EXTENSION_VERSION =
     typeof chrome !== "undefined" && chrome.runtime?.getManifest
       ? chrome.runtime.getManifest().version
@@ -237,6 +245,7 @@ console.log("示例代码块");
   let latestEvidence = null;
   let recordHistory = [];
   let recordSearchQuery = "";
+  let activeRecordEditorId = null;
   let liveResultChecks = {};
   let currentNextAction = null;
   let targetLock = null;
@@ -266,6 +275,13 @@ console.log("示例代码块");
       "Paste Markdown into X Articles": "把 Markdown 粘贴进 X 文章",
       "Paste a draft, open the article, then import. xPoster never publishes for you.": "粘贴草稿，打开文章，然后导入。xPoster 不会替你发布。",
       Checking: "检查中",
+      "Checking X": "正在识别 X",
+      "Not on X": "未在 X 页面",
+      "Refresh X": "刷新 X 页面",
+      "Old importer active": "旧脚本仍在运行",
+      "Editor ready": "编辑器就绪",
+      "X Articles ready": "X 文章页就绪",
+      "Not an article page": "不是文章页",
       "Not open": "未打开",
       Language: "语言",
       "Choose the side panel language.": "选择侧边栏语言。",
@@ -386,14 +402,21 @@ console.log("示例代码块");
       "This box always keeps the original Markdown text. Use Preview to see recognized images and links; images appear in X only after approval, download check, and Import.": "这个输入框始终保留 Markdown 原文。请到预览里看识别到的图片和链接；写入时可下载的图片会上传到 X。",
       "Use Preview to see what xPoster found. Imported images appear in X after Allow image website, Check downloads, and Import.": "在预览里查看 xPoster 识别到的内容。写入时，能下载的网页图片会上传到 X；失败的图片会保留链接。",
       "If image links still look like Markdown here, that is normal. xPoster converts them during Import, not inside this text box.": "如果图片链接在这里仍然像 Markdown 语法，这是正常的。xPoster 会在导入时转换它们，不会在这个输入框里转换。",
-      "Drop Markdown here": "把 Markdown 拖到这里",
+      "Drop Markdown here": "拖拽上传",
+      "Release to load it into the article draft": "松开后载入草稿",
       "Release to load Markdown": "松开即可载入 Markdown",
+      "Release to load": "松开载入",
+      "Drop cancelled": "已取消拖拽",
       "Reading Markdown...": "正在读取 Markdown...",
-      "Markdown loaded": "Markdown 已载入",
+      "Markdown loaded": "草稿就绪",
       "Could not load Markdown": "无法载入 Markdown",
       "Ready for Markdown": "等待 Markdown",
+      "Paste or drop Markdown": "粘贴或拖入 Markdown",
+      "MacDown, Obsidian, Typora, or any .md file.": "支持 MacDown、Obsidian、Typora 或 .md 文件。",
       "Drop a .md file or paste text into the editor below.": "拖入 .md 文件，或把文本粘贴到下面的编辑框。",
+      "Paste text or choose a .md file.": "粘贴文本，或选择 .md 文件。",
       "Release the file here. xPoster will load it into the draft box, not publish it.": "在这里松开文件。xPoster 会把它载入草稿框，不会发布。",
+      "Release to load it here.": "松开后载入这里。",
       "Loaded": "已载入",
       "Loading the dropped content into the draft box.": "正在把拖入内容载入草稿框。",
       "characters. Review it, then click Write article.": "个字符。检查后点击写入文章。",
@@ -493,12 +516,138 @@ console.log("示例代码块");
       Records: "记录",
       Settings: "设置",
       "Search records": "搜索记录",
+      "Draft recovery": "找回草稿",
+      "Find previous text": "找回上次输入",
+      "Find the Markdown you used before, copy it, or edit it before writing.": "找回之前输入的 Markdown，复制或编辑后再写入。",
       "Search title, file, URL, or Markdown text": "搜索标题、文件、网址或 Markdown 内容",
+      "Search Markdown text, title, file, or URL": "搜索 Markdown 原文、标题、文件或网址",
       "Search past drafts, links, and write results.": "搜索过去的草稿、链接和写入结果。",
+      "Search can find saved Markdown text, file names, and URLs.": "可以搜索已保存的 Markdown 原文、文件名和网址。",
+      "Paste or load Markdown to save the first recoverable draft.": "粘贴或载入 Markdown 后，会保存第一条可找回的草稿。",
+      "Record actions": "记录操作",
+      "recoverable Markdown draft(s). Newest first.": "条 Markdown 草稿可找回，最新在前。",
+      "No recoverable Markdown drafts yet.": "还没有可找回的 Markdown 草稿。",
+      "Use draft": "使用这份草稿",
+      "Copy text": "复制原文",
+      "Edit first": "编辑再用",
+      "使用这份草稿": "使用这份草稿",
+      "复制原文": "复制原文",
+      "编辑再用": "编辑再用",
+      Language: "语言",
+      "Choose the side panel language.": "选择侧边栏语言。",
+      Appearance: "外观",
+      "Choose how xPoster looks in the side panel.": "选择侧边栏的显示外观。",
+      System: "跟随系统",
+      Light: "浅色",
+      Dark: "暗色",
+      "Everything is included": "功能全部包含",
+      "No account, subscription, trial limit, or feature lock.": "无需账号、订阅、试用限制或功能锁。",
+      On: "开启",
+      "Privacy and control": "隐私和控制",
+      "Your draft stays in this browser. xPoster fills the editor only; you still review and publish in X.": "你的草稿留在这个浏览器里。xPoster 只填写编辑器，你仍然在 X 中检查并发布。",
+      Local: "本地",
+      "Web image handling": "网页图片处理",
+      "xPoster tries public image downloads in the background; failed downloads stay as Markdown links.": "xPoster 会在后台尝试下载公开图片；失败的图片会保留为 Markdown 链接。",
+      Auto: "自动",
+      "Choose the folder that contains relative image paths in your Markdown.": "选择包含 Markdown 相对图片路径的文件夹。",
+      "Title and cover": "标题和封面",
+      "xPoster sets them automatically when the X Article editor allows it.": "当 X 文章编辑器允许时，xPoster 会自动设置它们。",
+      "Embeds and code": "嵌入和代码",
+      "X TARGET": "X 文章",
+      "Workspace sections": "工作区",
+      "Cost, privacy, and control": "成本、隐私和控制",
+      "Publishing workflow": "发布流程",
+      "Advanced command dock": "高级命令栏",
+      "Readiness meter": "准备进度",
+      "Jump to section": "跳转到区域",
+      "Other actions": "其他操作",
+      "Article xPoster will fill": "xPoster 将写入的文章",
+      "No active X Article selected.": "尚未选择 X 文章。",
+      "Current editor text": "当前编辑器文本",
+      "Article review checklist": "文章检查清单",
+      "Article check": "文章检查",
+      "Saved result checklist": "保存的结果清单",
+      "Before you finish": "完成前",
+      "Draft preview": "草稿预览",
+      "Draft editor note": "草稿编辑器说明",
+      "Preview explanation": "预览说明",
+      "Markdown inspector": "Markdown 检查器",
+      "X Article readiness": "X 文章准备状态",
+      "How xPoster will place the draft": "xPoster 如何放置草稿",
+      "What is in your draft": "草稿内容",
+      "Draft contents": "草稿内容",
+      "Fix problems": "修复问题",
+      "Save result": "保存结果",
+      "Copy all": "复制全部",
+      "Copy path": "复制路径",
+      "the folder you cloned or downloaded": "你克隆或下载的文件夹",
+      "X page script": "X 页面脚本",
+      "X file import works": "X 文件导入可用",
+      "xPoster placeholders removed": "xPoster 占位文本已移除",
+      "xPoster loaded": "xPoster 已加载",
+      "Web images": "网页图片",
+      "No web image links in this draft.": "这篇草稿没有网页图片链接。",
+      "X editor": "X 编辑器",
+      "Next": "下一步",
+      "Fix this before importing": "写入前先处理这里",
+      "X Article blocker": "X 文章阻塞项",
+      "Add a Markdown draft first. Open or create an X Article draft.": "先添加 Markdown 草稿，再打开或新建 X 文章草稿。",
+      "Open X Articles so xPoster can load the page script.": "打开 X 文章，让 xPoster 加载页面脚本。",
+      "No X Article is open yet.": "尚未打开 X 文章。",
+      "Load the example or paste Markdown before checking X.": "检查 X 前先加载样例或粘贴 Markdown。",
+      "Load the example or paste a Markdown draft before checking X.": "检查 X 前先加载样例或粘贴 Markdown 草稿。",
+      "Load xPoster as an unpacked extension in Chrome.": "在 Chrome 中加载 xPoster 解包扩展。",
+      "Load xPoster as an unpacked extension in signed-in Chrome.": "在已登录的 Chrome 中加载 xPoster 解包扩展。",
+      "Confirm this xPoster copy is loaded in the signed-in Chrome profile.": "确认这个 xPoster 已加载到已登录的 Chrome 配置中。",
+      "Open X Articles in the active tab.": "在当前标签页打开 X 文章。",
+      "Paste Markdown, choose a file, or use the example to try the workflow.": "粘贴 Markdown、选择文件，或使用样例体验流程。",
+      "X can still open a Markdown file when needed.": "需要时，X 仍可打开 Markdown 文件。",
+      "The article body is not ready yet.": "文章正文尚未准备好。",
+      "This is a recognition preview. Image links stay as text in the draft box; xPoster downloads public images during Write and keeps failed downloads as links.": "这是识别预览。图片链接会留在草稿框中；写入时 xPoster 会下载公开图片，失败的图片保留为链接。",
+      "Each part of the draft will show whether it becomes text, an image, the title, the cover, or an embed.": "草稿的每一部分都会显示将变成正文、图片、标题、封面还是嵌入内容。",
+      "Finish the X Article review before calling this import done.": "完成 X 文章检查后，再确认本次写入完成。",
+      "Post-import review": "导入后检查",
+      "Readiness progress": "准备进度",
+      "Import readiness status": "导入准备状态",
       "No records match this search.": "没有匹配的记录。",
       "Clear the search or try a title, file name, URL, or Markdown phrase.": "清空搜索，或换一个标题、文件名、网址、Markdown 片段试试。",
       "Showing all records. Search can find saved Markdown text.": "正在显示全部记录。搜索可找到已保存的 Markdown 原文。",
       "Showing matching records.": "正在显示匹配记录。",
+      "saved draft(s). Newest first.": "条可找回草稿，最新在前。",
+      "saved draft(s) found.": "条草稿匹配。",
+      "No recoverable drafts yet.": "还没有可找回的草稿。",
+      "No saved Markdown in this record.": "这条记录没有可找回的 Markdown。",
+      "Untitled Markdown": "未命名 Markdown",
+      "Saved Markdown": "已保存 Markdown",
+      "Draft text": "草稿原文",
+      "Markdown preview": "Markdown 预览",
+      "Last saved": "保存于",
+      "Use": "使用",
+      "Edit": "编辑",
+      "Open": "打开",
+      "Clear records": "清空记录",
+      "Clear saved record history from this browser.": "清空保存在这个浏览器里的记录历史。",
+      "Close": "关闭",
+      "Edit saved Markdown": "编辑已保存的 Markdown",
+      "Saved Markdown": "已保存 Markdown",
+      "No link saved": "没有保存链接",
+      "Open linked page": "打开关联页面",
+      "Written to X": "已写入 X",
+      "Loaded only": "仅载入",
+      "Search can find the saved Markdown text.": "可以搜索已保存的 Markdown 原文。",
+      "Use edited draft": "使用编辑后的草稿",
+      "Copy edited draft": "复制编辑内容",
+      "Use draft": "使用草稿",
+      "Copy text": "复制文本",
+      "Cancel edit": "取消编辑",
+      "Edit this saved Markdown before using it": "使用前可以编辑这份已保存的 Markdown",
+      "Edited Markdown restored to Pending.": "编辑后的 Markdown 已恢复到待发布。",
+      "Edited Markdown copied.": "编辑后的 Markdown 已复制。",
+      "Use this saved Markdown in Pending.": "把这份 Markdown 放回待发布。",
+      "Copy this saved Markdown.": "复制这份 Markdown。",
+      "Edit this saved Markdown.": "编辑这份 Markdown。",
+      "Page URL saved": "已保存网页地址",
+      "Linked page": "关联网页",
       "Markdown snapshot saved": "已保存 Markdown 快照",
       "Markdown snapshot not available": "没有可恢复的 Markdown",
       "Markdown restored": "Markdown 已恢复",
@@ -518,13 +667,14 @@ console.log("示例代码块");
       "No records yet.": "还没有记录。",
       "Write or check an article to create the first record.": "载入 Markdown、检查或写入文章后会生成第一条记录。",
       "Load Markdown, run Check, or Write article to create the first record.": "载入 Markdown、运行检查或写入文章后会生成第一条记录。",
+      "Loaded example Markdown draft.": "已载入 Markdown 样例草稿。",
       "record(s), newest first.": "条记录，最新在前。",
       "local record(s), newest first.": "条记录，最新在前。",
       "Draft loaded": "草稿已载入",
       "Draft ready": "草稿待发布",
       "Draft updated": "草稿已更新",
       "Loaded draft": "已载入草稿",
-      "Markdown loaded": "Markdown 已载入",
+      "Markdown loaded": "草稿就绪",
       "Article URL": "文章地址",
       "Page URL": "网页地址",
       "Open article": "打开文章",
@@ -934,11 +1084,15 @@ console.log("示例代码块");
       "2. Write Article": "2. 写入文章",
       "Write to X Article": "写入 X 文章",
       "Write article": "写入文章",
+      "Add Markdown first": "先放入 Markdown",
       "Article written": "文章已写入",
       "Writing article": "正在写入文章",
       "Ready to write. Web images that Chrome cannot read will stay as Markdown links.": "可以写入。Chrome 暂时无法读取的网页图片会保留为 Markdown 图片链接。",
       "Uses the current X Article if one is open. Otherwise xPoster creates a new one.": "如果当前已经打开 X 文章，就写入当前文章；否则 xPoster 会新建一篇。",
+      "Uses current X Article, or creates one.": "使用当前 X 文章，或新建一篇。",
       "Paste Markdown first.": "请先粘贴 Markdown。",
+      "Paste or drop Markdown into the editor above.": "把 Markdown 粘贴或拖入上方编辑框。",
+      "Writing into X. You can watch the final result in the X Article tab.": "正在写入 X。可以在 X 文章标签页查看结果。",
       "Writing...": "正在写入...",
       "Writing article started.": "开始写入文章。",
       "Writing queued": "写入已排队",
@@ -1399,15 +1553,81 @@ console.log("示例代码块");
     })
   );
   const EN_TEXT = new Map(Array.from(ZH_TEXT.entries()).map(([en, zh]) => [zh, en]));
+  i18n?.registerMessages({
+    en: Object.fromEntries(Array.from(ZH_TEXT.keys()).map((key) => [key, key])),
+    zh: Object.fromEntries(ZH_TEXT)
+  });
 
   const hasChromeApi = () =>
     typeof chrome !== "undefined" && Boolean(chrome.storage?.local && chrome.tabs);
 
+  const themeMediaQuery =
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-color-scheme: dark)")
+      : null;
+  let currentThemeMode = "light";
+
   function preferredLanguage() {
-    return /^zh\b/i.test(navigator.language || "") ? "zh" : "en";
+    return i18n?.preferredLanguage?.() || (/^zh\b/i.test(navigator.language || "") ? "zh" : "en");
+  }
+
+  function normalizeThemeMode(mode) {
+    return THEME_MODES.has(mode) ? mode : "light";
+  }
+
+  function resolveTheme(mode = currentThemeMode) {
+    if (mode === "system") return themeMediaQuery?.matches ? "dark" : "light";
+    return normalizeThemeMode(mode);
+  }
+
+  function syncThemeChoice() {
+    if (!els.themeChoice) return;
+    els.themeChoice.querySelectorAll('input[name="themeMode"]').forEach((input) => {
+      input.checked = input.value === currentThemeMode;
+    });
+  }
+
+  function applyTheme(mode = currentThemeMode) {
+    currentThemeMode = normalizeThemeMode(mode);
+    const resolvedTheme = resolveTheme(currentThemeMode);
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.dataset.themeMode = currentThemeMode;
+    document.documentElement.style.colorScheme = resolvedTheme;
+    document.body.dataset.theme = resolvedTheme;
+    document.body.dataset.themeMode = currentThemeMode;
+    syncThemeChoice();
+  }
+
+  async function setTheme(mode, { persist = true } = {}) {
+    applyTheme(mode);
+    if (persist && hasChromeApi()) {
+      await chrome.storage.local.set({ [STORAGE_THEME]: currentThemeMode });
+    }
+  }
+
+  async function restoreTheme() {
+    let storedTheme = null;
+    if (hasChromeApi()) {
+      const stored = await chrome.storage.local.get(STORAGE_THEME);
+      storedTheme = stored[STORAGE_THEME] || null;
+    }
+    await setTheme(storedTheme || currentThemeMode, { persist: false });
+  }
+
+  function installSystemThemeSync() {
+    if (!themeMediaQuery) return;
+    const sync = () => {
+      if (currentThemeMode === "system") applyTheme("system");
+    };
+    if (typeof themeMediaQuery.addEventListener === "function") {
+      themeMediaQuery.addEventListener("change", sync);
+      return;
+    }
+    themeMediaQuery.addListener?.(sync);
   }
 
   function translateText(text) {
+    if (i18n) return i18n.t(sourceText(text));
     const source = sourceText(text);
     if (currentLanguage !== "zh") return source;
     const direct = ZH_TEXT.get(source);
@@ -1454,6 +1674,7 @@ console.log("示例代码块");
   function translatePatternText(source) {
     const patterns = [
       [/^(\d+)\/(\d+) ready$/, "$1/$2 就绪"],
+      [/^(\d+)\/(\d+) record items ready\.$/, "$1/$2 条记录项就绪。"],
       [/^(\d+)\/(\d+) checks ready$/, "$1/$2 项检查就绪"],
       [/^(\d+)\/(\d+) live verification steps ready\.$/, "$1/$2 个导入后检查步骤就绪。"],
       [/^(\d+)\/(\d+) after-import steps ready\.$/, "$1/$2 个导入后步骤就绪。"],
@@ -1472,6 +1693,12 @@ console.log("示例代码块");
       [/^(\d+) blocked stage\(s\), (\d+) complete$/, "$1 个阶段阻塞，$2 个完成"],
       [/^(\d+) stage\(s\) ready, (\d+) complete$/, "$1 个阶段就绪，$2 个完成"],
       [/^(\d+)\/(\d+) stage\(s\) complete$/, "$1/$2 个阶段完成"],
+      [/^(\d+)\/(\d+)$/, "$1/$2"],
+      [/^(.+) blocks (\d+)$/, "$1 $2"],
+      [/^Text blocks (\d+)$/, "文本块 $1"],
+      [/^Special blocks (\d+)$/, "特殊块 $1"],
+      [/^Images (\d+)$/, "图片 $1"],
+      [/^Local images (\d+)$/, "本地图片 $1"],
       [/^(\d+) blocker\(s\), (\d+)\/(\d+) proven$/, "$1 个阻塞项，$2/$3 已证明"],
       [/^(\d+) pending item\(s\), (\d+)\/(\d+) proven$/, "$1 个待处理项，$2/$3 已证明"],
       [/^(\d+) of (\d+) record\(s\) match this search\.$/, "$2 条记录中有 $1 条匹配。"],
@@ -1491,6 +1718,7 @@ console.log("示例代码块");
       [/^(\d+) block\(s\), (\d+) character\(s\), ready to write\.$/, "$1 个块，$2 个字符，可以写入。"],
       [/^Loaded (\d+) characters\. Review it, then click Write article\.$/, "已载入 $1 个字符。检查后点击写入文章。"],
       [/^(\d+) characters\. Review it, then click Write article\.$/, "$1 个字符。检查后点击写入文章。"],
+      [/^(\d+) characters, ready to write\.$/, "$1 字符，可以写入。"],
       [/^(\d+) publishable block\(s\), title detected$/, "$1 个可发布块，已检测标题"],
       [/^(\d+) publishable block\(s\), no title detected$/, "$1 个可发布块，未检测标题"],
       [/^(\d+) publishable block\(s\) loaded\.$/, "已加载 $1 个可发布块。"],
@@ -1501,6 +1729,11 @@ console.log("示例代码块");
       [/^(\d+) image\(s\) uploaded, (\d+) kept as links$/, "$1 张图片已上传，$2 张保留为链接"],
       [/^(\d+) image\(s\) ready, (\d+) need attention$/, "$1 张图片已就绪，$2 张保留为链接"],
       [/^(\d+) image\(s\) uploaded$/, "$1 张图片已上传"],
+      [/^(\d+) web image\(s\) will be tried during Write\.$/, "$1 张网页图片会在写入时尝试处理。"],
+      [/^(\d+) web image\(s\) may stay as links unless replaced\.$/, "$1 张网页图片可能保留为链接，除非替换为可下载图片。"],
+      [/^(\d+) web image\(s\) will upload through X when reachable\.$/, "$1 张网页图片可访问时会通过 X 上传。"],
+      [/^(\d+) web image\(s\) will be handled during Write\. Unreachable images stay as links\.$/, "$1 张网页图片会在写入时处理；无法访问的图片会保留为链接。"],
+      [/^(\d+) image\(s\) will upload through X when possible\.$/, "$1 张图片会尽量通过 X 上传。"],
       [/^(\d+) upload items need the X editor\.$/, "$1 个上传项需要 X 编辑器。"],
       [/^(\d+) upload item need the X editor\.$/, "$1 个上传项需要 X 编辑器。"],
       [/^(\d+) media upload item\(s\) can use X upload handler\.$/, "$1 个媒体上传项可使用 X 上传能力。"],
@@ -1738,6 +1971,7 @@ console.log("示例代码块");
   }
 
   function translateDynamicDom(root = document.body) {
+    i18n?.renderDom(root);
     translateNodeText(root);
     translateAttributes(root);
     translateEvidencePlaceholder(root);
@@ -1746,7 +1980,7 @@ console.log("示例代码块");
   }
 
   function localizeText(text) {
-    return translateText(String(text || ""));
+    return i18n?.t(String(text || "")) || translateText(String(text || ""));
   }
 
   function translateEvidencePlaceholder(root = document.body) {
@@ -1759,8 +1993,11 @@ console.log("示例代码块");
   }
 
   async function setLanguage(language, { persist = true } = {}) {
-    currentLanguage = language === "zh" ? "zh" : "en";
+    currentLanguage = i18n?.normalizeLanguage?.(language) || (language === "zh" ? "zh" : "en");
     if (els.languageSelect) els.languageSelect.value = currentLanguage;
+    if (i18n) {
+      await i18n.setLanguage(currentLanguage, { persist, render: false });
+    }
     translateDynamicDom();
     if (persist && hasChromeApi()) {
       chrome.storage.local.set({ [STORAGE_LANGUAGE]: currentLanguage });
@@ -1768,6 +2005,11 @@ console.log("示例代码块");
   }
 
   async function restoreLanguage() {
+    if (i18n) {
+      currentLanguage = await i18n.restoreLanguage({ render: false });
+      await setLanguage(currentLanguage, { persist: false });
+      return;
+    }
     if (hasChromeApi()) {
       const stored = await chrome.storage.local.get(STORAGE_LANGUAGE);
       if (stored[STORAGE_LANGUAGE]) {
@@ -2095,7 +2337,7 @@ console.log("示例代码块");
       updatePreflight();
       updateWriteButton();
       updateProgressiveSections();
-      setDraftDropStatus("Ready for Markdown", "Drop a .md file or paste text into the editor below.", "idle");
+      setDraftDropStatus("Paste or drop Markdown", "Paste text or choose a .md file.", "idle");
       return;
     }
     try {
@@ -2119,7 +2361,7 @@ console.log("示例代码块");
       updatePreflight();
       updateWriteButton();
       updateProgressiveSections();
-      setDraftDropStatus("Markdown loaded", `${markdown.length} characters. Review it, then click Write article.`, "done");
+      setDraftDropStatus("Markdown loaded", draftReadyDetail(markdown.length, counts), "done");
     } catch (error) {
       log(`Could not analyze draft: ${error?.message || error}`);
       setDraftDropStatus("Could not load Markdown", error?.message || "Try a .md, .markdown, .txt file, or plain Markdown text.", "error");
@@ -2783,18 +3025,29 @@ console.log("示例代码块");
     return { action: "blocked", label: "Write article", enabled: false };
   }
 
+  function focusMarkdownInput() {
+    showWorkspacePanel("draft");
+    setActiveJump("draft");
+    scrollTargetIntoView(els.markdown || els.draftPanel, "center");
+    window.setTimeout(() => els.markdown?.focus?.(), 0);
+  }
+
   function runImportButtonAction() {
     const checks = buildPreflightChecks();
     const gate = getImportGate(checks);
     const action = primaryImportAction(gate);
     if (action.action === "import") return importDraft();
-    log(gate.message || "Import is not ready yet.");
+    focusMarkdownInput();
+    setDraftDropStatus("Paste or drop Markdown", "Paste or drop Markdown into the editor above.", "idle");
     return null;
   }
 
   function setImportButtonLabel(label) {
     const svg = els.importDraft.querySelector("svg")?.outerHTML || IMPORT_ICON_SVG;
-    els.importDraft.innerHTML = `${svg}${shared.escapeHtml(label)}`;
+    els.importDraft.innerHTML = `${svg}<span></span>`;
+    const labelNode = els.importDraft.querySelector("span");
+    if (labelNode) labelNode.textContent = label;
+    translateDynamicDom(els.importDraft);
   }
 
   function applyPrimaryActionToImportButton(action) {
@@ -2823,42 +3076,48 @@ console.log("示例代码块");
     const hasDraft = Boolean(latestParsed?.segments?.length);
     const button = els.importDraft;
     if (!button) return;
-    button.disabled = busy || !hasDraft;
-    setImportButtonLabel(busy ? "Writing..." : "Write article");
+    const actions = button.closest(".actions");
+    if (actions) actions.dataset.empty = hasDraft || busy ? "false" : "true";
+    button.disabled = busy;
+    button.setAttribute("aria-disabled", busy ? "true" : "false");
+    setImportButtonLabel(busy ? "Writing..." : hasDraft ? "Write article" : "Add Markdown first");
     if (els.importHint) {
       const hint = compactWriteHint({ hasDraft, busy });
       els.importHint.dataset.tone = hint.tone;
+      delete els.importHint.dataset.i18n;
       els.importHint.textContent = hint.text;
     }
-    translateDynamicDom(button.closest(".actions") || button);
+    translateDynamicDom(actions || button);
   }
 
   function compactWriteHint({ hasDraft, busy = false } = {}) {
     if (busy) return { tone: "ready", text: "Writing into X. You can watch the final result in the X Article tab." };
-    if (!hasDraft) return { tone: "warn", text: "Paste Markdown first." };
+    if (!hasDraft) return { tone: "idle", text: "Paste or drop Markdown into the editor above." };
     const remoteCount = remoteHttpImageSegments(latestParsed).length;
-    if (remoteCount) {
-      if (remoteImageProbeStatus.state === "checking") {
-        return { tone: "ready", text: `${remoteCount} web image(s) will be tried during Write.` };
-      }
-      if (remoteImageProbeStatus.state === "checked" && remoteImageProbeStatus.fail) {
-        return {
-          tone: "warn",
-          text: `${remoteImageProbeStatus.fail} web image(s) may stay as links unless replaced.`
-        };
-      }
-      if (remoteImageProbeStatus.state === "checked") {
-        return { tone: "ready", text: `${remoteCount} web image(s) will upload through X when reachable.` };
-      }
-      return { tone: "ready", text: `${remoteCount} web image(s) will be handled during Write. Unreachable images stay as links.` };
-    }
+    if (remoteCount) return remoteImageWriteHint(remoteCount);
     const imageCount = latestCounts?.image || 0;
     return {
       tone: "ready",
       text: imageCount
         ? `${imageCount} image(s) will upload through X when possible.`
-        : "Uses the current X Article if one is open. Otherwise xPoster creates a new one."
+        : "Uses current X Article, or creates one."
     };
+  }
+
+  function remoteImageWriteHint(remoteCount) {
+    if (remoteImageProbeStatus.state === "checking") {
+      return { tone: "ready", text: `${remoteCount} web image(s) will be tried during Write.` };
+    }
+    if (remoteImageProbeStatus.state === "checked" && remoteImageProbeStatus.fail) {
+      return {
+        tone: "warn",
+        text: `${remoteImageProbeStatus.fail} web image(s) may stay as links unless replaced.`
+      };
+    }
+    if (remoteImageProbeStatus.state === "checked") {
+      return { tone: "ready", text: `${remoteCount} web image(s) will upload through X when reachable.` };
+    }
+    return { tone: "ready", text: `${remoteCount} web image(s) will be handled during Write. Unreachable images stay as links.` };
   }
 
   function updateNextAction(checks = null, gate = null) {
@@ -3804,7 +4063,11 @@ console.log("示例代码块");
   function log(message) {
     const item = document.createElement("li");
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    item.textContent = `${time} ${message}`;
+    const timeNode = document.createElement("time");
+    timeNode.textContent = time;
+    const messageNode = document.createElement("span");
+    messageNode.textContent = message;
+    item.append(timeNode, " ", messageNode);
     if (els.activityPanel) els.activityPanel.hidden = false;
     els.activityLog.prepend(item);
     while (els.activityLog.children.length > 8) els.activityLog.lastElementChild.remove();
@@ -3817,9 +4080,28 @@ console.log("示例代码块");
     els.draftDropStatus.dataset.tone = tone;
     const titleNode = els.draftDropStatus.querySelector("strong");
     const detailNode = els.draftDropStatus.querySelector("span");
-    if (titleNode) titleNode.textContent = title;
-    if (detailNode) detailNode.textContent = detail;
+    if (titleNode) {
+      titleNode.dataset.i18n = title;
+      titleNode.textContent = title;
+    }
+    if (detailNode) {
+      detailNode.dataset.i18n = detail;
+      detailNode.textContent = detail;
+    }
     translateDynamicDom(els.draftDropStatus);
+  }
+
+  function acknowledgeDraftInput() {
+    if (!els.markdown) return;
+    els.markdown.classList.remove("draft-ack");
+    void els.markdown.offsetWidth;
+    els.markdown.classList.add("draft-ack");
+    window.setTimeout(() => els.markdown?.classList.remove("draft-ack"), 520);
+  }
+
+  function draftReadyDetail(length) {
+    const formattedLength = Number(length || 0).toLocaleString();
+    return currentLanguage === "zh" ? `${formattedLength} 字，可写入` : `${formattedLength} chars, ready`;
   }
 
   function createLiveProgressState() {
@@ -4177,7 +4459,7 @@ console.log("示例代码块");
 
   function syncRecordPanel() {
     if (!els.recordsPanel) return;
-    const nodes = [els.runSummary, els.recordHistory, els.evidenceDetails, els.activityPanel].filter(Boolean);
+    const nodes = [els.recordHistory, els.runSummary, els.evidenceDetails, els.activityPanel].filter(Boolean);
     for (const node of nodes) {
       if (node.parentElement !== els.recordsPanel) els.recordsPanel.appendChild(node);
     }
@@ -4368,11 +4650,25 @@ console.log("示例代码块");
   }
 
   function showWorkspacePanel(target) {
-    document.querySelectorAll(".tab").forEach((tab) => {
-      tab.classList.toggle("active", tab.dataset.tab === target);
+    const tabs = [...document.querySelectorAll(".tab")];
+    const activeTabIndex = tabs.findIndex((tab) => tab.dataset.tab === target);
+    const tabsContainer = document.querySelector(".tabs");
+    if (tabsContainer) {
+      tabsContainer.style.setProperty("--tab-count", String(Math.max(tabs.length, 1)));
+      tabsContainer.style.setProperty("--tab-index", String(Math.max(activeTabIndex, 0)));
+      tabsContainer.dataset.activeTab = activeTabIndex >= 0 ? "true" : "false";
+    }
+    tabs.forEach((tab, index) => {
+      tab.classList.toggle("active", index === activeTabIndex);
     });
     document.querySelectorAll(".panel").forEach((panel) => {
-      panel.classList.toggle("active", panel.dataset.panel === target);
+      const isActive = panel.dataset.panel === target;
+      if (isActive && !panel.classList.contains("active")) {
+        panel.style.animation = "none";
+        void panel.offsetWidth;
+        panel.style.animation = "";
+      }
+      panel.classList.toggle("active", isActive);
     });
   }
 
@@ -4382,9 +4678,13 @@ console.log("示例代码块");
     });
   }
 
+  function prefersReducedMotion() {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
+  }
+
   function scrollTargetIntoView(element, block = "start") {
     if (!element) return;
-    element.scrollIntoView({ behavior: "smooth", block });
+    element.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block });
   }
 
   function openDetailsFor(element) {
@@ -4425,7 +4725,7 @@ console.log("示例代码块");
     if (!/^https:\/\/(?:x|twitter)\.com\//.test(url)) {
       latestPageStatus = null;
       latestDiagnostics = null;
-      setPageState("Not open", "warn");
+      setPageState("Not on X", "warn");
       setReadiness({ target: "Open X", editor: "Unknown", vault: "Optional" });
       updatePreflight();
       return;
@@ -4434,7 +4734,7 @@ console.log("示例代码块");
     if (!response?.ok) {
       latestPageStatus = null;
       latestDiagnostics = null;
-      setPageState("Reload X", "warn");
+      setPageState("Refresh X", "warn");
       setReadiness({ target: "X tab", editor: "Reload", vault: "Optional" });
       updatePreflight();
       return;
@@ -4443,10 +4743,10 @@ console.log("示例代码块");
     latestPageStatus = response;
     if (previousUrl && previousUrl !== response.url) latestDiagnostics = null;
     const oldImporter = originalImporterResidueStatus();
-    if (oldImporter.detected) setPageState("Old importer", "warn");
+    if (oldImporter.detected) setPageState("Old importer active", "warn");
     else if (response.hasEditor) setPageState("Editor ready", "ready");
-    else if (response.isArticleRoute) setPageState("Articles", "ready");
-    else setPageState("Not article", "warn");
+    else if (response.isArticleRoute) setPageState("X Articles ready", "ready");
+    else setPageState("Not an article page", "warn");
     updateVaultState(response.vault);
     setReadiness({
       target: response.isArticleRoute ? "Articles" : "Go Articles",
@@ -4461,9 +4761,8 @@ console.log("示例代码块");
   }
 
   function setPageState(text, tone) {
-    const label = els.pageState.querySelector("strong");
-    if (label) label.textContent = text;
-    else els.pageState.textContent = text;
+    els.pageState.textContent = translateText(text);
+    els.pageState.dataset.xposterSourceText = text;
     els.pageState.className = `page-state ${tone || ""}`;
   }
 
@@ -4760,7 +5059,8 @@ console.log("示例代码块");
       saveDraft();
       analyzeDraft();
       rememberDraftHistory(source, { fileName: file.name, size: file.size, forceNew: true });
-      setDraftDropStatus("Markdown loaded", `Loaded ${text.length} characters. Review it, then click Write article.`, "done");
+      setDraftDropStatus("Markdown loaded", draftReadyDetail(text.length), "done");
+      acknowledgeDraftInput();
       log(`Loaded ${file.name}.`);
       updateWriteButton();
     } catch (error) {
@@ -4773,6 +5073,7 @@ console.log("示例代码块");
   function hasMarkdownTransfer(dataTransfer) {
     if (!dataTransfer) return false;
     const types = Array.from(dataTransfer.types || []);
+    if (types.includes("Files")) return true;
     if (types.includes("text/plain") || types.includes("text/markdown")) return true;
     return hasMarkdownFile(dataTransfer);
   }
@@ -4796,63 +5097,74 @@ console.log("示例代码块");
   function installDraftDropTray() {
     if (!els.draftPanel) return;
     let dragDepth = 0;
-    const positionDraftDropTray = (event) => {
-      const rect = els.draftPanel.getBoundingClientRect();
-      const trayWidth = Math.min(300, Math.max(160, rect.width - 28));
-      const trayHeight = 72;
-      const minX = trayWidth / 2 + 8;
-      const maxX = Math.max(minX, rect.width - trayWidth / 2 - 8);
-      const minY = 116;
-      const maxY = Math.max(minY, rect.height - trayHeight - 20);
-      const x = Math.min(maxX, Math.max(minX, event.clientX - rect.left));
-      const y = Math.min(maxY, Math.max(minY, event.clientY - rect.top + 22));
-      els.draftPanel.style.setProperty("--drop-x", `${x}px`);
-      els.draftPanel.style.setProperty("--drop-y", `${y}px`);
+    let dragCancelled = false;
+    const activateDropzone = () => {
+      if (dragCancelled) return;
+      showWorkspacePanel("draft");
+      setActiveJump("draft");
+      els.draftPanel.dataset.dropLabel = localizeText("Drop Markdown here");
+      els.draftPanel.dataset.dropHint = localizeText("Release to load");
+      els.draftPanel.classList.add("drag-active");
+      setDraftDropStatus("Drop Markdown here", "Release to load it into the article draft", "ready");
     };
-    const clearDraftDropTrayPosition = () => {
-      els.draftPanel.style.removeProperty("--drop-x");
-      els.draftPanel.style.removeProperty("--drop-y");
+    const deactivateDropzone = () => {
+      els.draftPanel.classList.remove("drag-active");
+      delete els.draftPanel.dataset.dropLabel;
+      delete els.draftPanel.dataset.dropHint;
+    };
+    const restoreDropStatus = () => {
+      setDraftDropStatus(
+        latestParsed?.segments?.length ? "Markdown loaded" : "Ready for Markdown",
+        latestParsed?.segments?.length
+          ? draftReadyDetail(els.markdown.value.length)
+          : "Paste text or choose a .md file.",
+        latestParsed?.segments?.length ? "done" : "idle"
+      );
+    };
+    const cancelDropzone = () => {
+      if (!dragDepth && !els.draftPanel.classList.contains("drag-active")) return;
+      dragCancelled = true;
+      dragDepth = 0;
+      deactivateDropzone();
+      setDraftDropStatus("Drop cancelled", "Paste text or choose a .md file.", "idle");
     };
     document.addEventListener("dragenter", (event) => {
       if (!hasMarkdownTransfer(event.dataTransfer)) return;
+      if (!els.draftPanel.classList.contains("drag-active")) dragCancelled = false;
       dragDepth += 1;
-      showWorkspacePanel("draft");
-      setActiveJump("draft");
-      positionDraftDropTray(event);
-      els.draftPanel.dataset.dropLabel = localizeText("Release to load Markdown");
-      els.draftPanel.classList.add("drag-active");
-      setDraftDropStatus("Release to load Markdown", "Release the file here. xPoster will load it into the draft box, not publish it.", "ready");
+      activateDropzone();
     }, true);
     document.addEventListener("dragover", (event) => {
       if (!hasMarkdownTransfer(event.dataTransfer)) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = "copy";
-      showWorkspacePanel("draft");
-      positionDraftDropTray(event);
-      els.draftPanel.classList.add("drag-active");
-      setDraftDropStatus("Release to load Markdown", "Release the file here. xPoster will load it into the draft box, not publish it.", "ready");
+      event.dataTransfer.dropEffect = dragCancelled ? "none" : "copy";
+      activateDropzone();
     }, true);
     document.addEventListener("dragleave", () => {
       dragDepth = Math.max(0, dragDepth - 1);
       if (!dragDepth) {
-        els.draftPanel.classList.remove("drag-active");
-        clearDraftDropTrayPosition();
-        setDraftDropStatus(
-          latestParsed?.segments?.length ? "Markdown loaded" : "Ready for Markdown",
-          latestParsed?.segments?.length
-            ? `${els.markdown.value.length} characters. Review it, then click Write article.`
-            : "Drop a .md file or paste text into the editor below.",
-          latestParsed?.segments?.length ? "done" : "idle"
-        );
+        dragCancelled = false;
+        deactivateDropzone();
+        restoreDropStatus();
       }
+    }, true);
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      cancelDropzone();
     }, true);
     document.addEventListener("drop", async (event) => {
       if (!hasMarkdownTransfer(event.dataTransfer)) return;
       event.preventDefault();
       event.stopPropagation();
+      if (dragCancelled) {
+        dragCancelled = false;
+        dragDepth = 0;
+        deactivateDropzone();
+        restoreDropStatus();
+        return;
+      }
       dragDepth = 0;
-      els.draftPanel.classList.remove("drag-active");
-      clearDraftDropTrayPosition();
+      deactivateDropzone();
       setDraftDropStatus("Reading Markdown...", "Loading the dropped content into the draft box.", "ready");
       const file = Array.from(event.dataTransfer.files || []).find((item) => /\.(md|markdown|mdown|mkd|txt)$/i.test(item.name || ""));
       if (file) {
@@ -4864,6 +5176,7 @@ console.log("示例代码块");
           saveDraft();
           analyzeDraft();
           rememberDraftHistory("drop", { forceNew: true });
+          acknowledgeDraftInput();
           log("Loaded dragged Markdown.");
         } else {
           setDraftDropStatus("Could not load Markdown", "That drop did not include Markdown text or a .md file.", "error");
@@ -4879,6 +5192,7 @@ console.log("示例代码块");
     saveDraft();
     analyzeDraft();
     rememberDraftHistory("example", { forceNew: true });
+    acknowledgeDraftInput();
   }
 
   async function chooseVault() {
@@ -4927,7 +5241,8 @@ console.log("示例代码块");
       analyzeDraft();
       rememberDraftHistory("restored", { forceNew: true });
       showWorkspacePanel("draft");
-      setDraftDropStatus("Markdown loaded", `${nextDraft.length} characters. Review it, then click Write article.`, "done");
+      setDraftDropStatus("Markdown loaded", draftReadyDetail(nextDraft.length), "done");
+      acknowledgeDraftInput();
       log("Markdown draft loaded from the X Article tab.");
     });
   }
@@ -5179,12 +5494,93 @@ console.log("示例代码块");
     return currentLanguage === "zh" ? "还没有图片上传结果" : "No image upload result";
   }
 
+  function formatRecordSourceText(record) {
+    const source = record?.source || {};
+    const label = translateText(source.label || "Draft");
+    if (source.fileName) return `${label}: ${source.fileName}`;
+    return label;
+  }
+
   function recordHasMarkdown(record) {
     return Boolean(String(record?.markdown || record?.evidence?.draft?.markdown || "").trim());
   }
 
   function recordMarkdownText(record) {
     return String(record?.markdown || record?.evidence?.draft?.markdown || "");
+  }
+
+  function markdownMeaningfulLines(markdown) {
+    const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
+    const filtered = [];
+    let frontmatter = false;
+    for (let index = 0; index < lines.length; index += 1) {
+      const rawLine = lines[index];
+      const line = rawLine.trim();
+      if (frontmatter) {
+        if (line === "---") frontmatter = false;
+        continue;
+      }
+      if (line === "---" && index === 0) {
+        frontmatter = true;
+        continue;
+      }
+      if (!line || /^!\[[^\]]*]\([^)]+\)\s*$/.test(line)) continue;
+      filtered.push(line.replace(/^#{1,6}\s+/, "").replace(/\s+/g, " "));
+      if (filtered.length >= 4) break;
+    }
+    return filtered;
+  }
+
+  function truncateText(text, max = 160) {
+    const normalized = String(text || "").replace(/\s+/g, " ").trim();
+    if (normalized.length <= max) return normalized;
+    return `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+  }
+
+  function recordDisplayTitle(record) {
+    const title = String(record?.title || "").trim();
+    if (title && title !== "Untitled draft") return title;
+    const heading = markdownMeaningfulLines(recordMarkdownText(record))[0];
+    if (heading) return truncateText(heading, 76);
+    if (record?.source?.fileName) return record.source.fileName;
+    return "Untitled Markdown";
+  }
+
+  function recordMarkdownPreview(record) {
+    const markdown = recordMarkdownText(record);
+    const preview = markdownMeaningfulLines(markdown).join(" ") || markdown.replace(/\r\n?/g, "\n").split("\n").find((line) => line.trim());
+    return truncateText(preview, 180) || "No saved Markdown in this record.";
+  }
+
+  function formatRecordTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value || "";
+    return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function recordRecoveryStats(record) {
+    const items = [];
+    if (record.characters) items.push(currentLanguage === "zh" ? `${record.characters} 字` : `${record.characters} chars`);
+    if (record.blocks) items.push(currentLanguage === "zh" ? `${record.blocks} 块` : `${record.blocks} blocks`);
+    if (record.remoteImages?.count) items.push(currentLanguage === "zh" ? `${record.remoteImages.count} 图` : `${record.remoteImages.count} images`);
+    if (record.source?.fileName) items.push(record.source.fileName);
+    return items.slice(0, 3);
+  }
+
+  function recordSourceMeta(record, updatedTime) {
+    const parts = [];
+    const source = formatRecordSourceText(record);
+    if (source) parts.push(source);
+    if (updatedTime) parts.push(updatedTime);
+    if (record.url) parts.push(currentLanguage === "zh" ? "有网页地址" : "Linked page");
+    return parts.join(" · ");
+  }
+
+  function recordHumanStatus(record) {
+    if (record.kind === "import") return "Written to X";
+    if (record.kind === "import-error") return "Import failed";
+    if (record.kind === "draft-loaded") return "Loaded only";
+    return record.status || recordKindLabel(record.kind);
   }
 
   function recordSearchText(record) {
@@ -5371,33 +5767,48 @@ console.log("示例代码块");
 
   function renderRecordHistory() {
     if (!els.recordHistoryList) return;
-    const total = recordHistory.length;
-    const visibleRecords = filteredRecordHistory();
+    const recoverableRecords = recordHistory.filter(recordHasMarkdown);
+    const total = recoverableRecords.length;
+    const visibleRecords = filteredRecordHistory().filter(recordHasMarkdown);
     const visibleTotal = visibleRecords.length;
     const isSearching = Boolean(recordSearchQuery.trim());
     if (els.recordHistory) els.recordHistory.hidden = false;
     if (els.recordHistoryMeta) {
       els.recordHistoryMeta.textContent = total
-        ? `${total} record(s), newest first.`
-        : "No records yet.";
+        ? currentLanguage === "zh"
+          ? isSearching
+            ? `找到 ${visibleTotal} 条`
+            : `${total} 条草稿`
+          : isSearching
+            ? `${visibleTotal} found`
+            : `${total} draft(s)`
+        : currentLanguage === "zh"
+          ? "还没有草稿"
+          : "No drafts";
     }
     if (els.recordSearchInput && els.recordSearchInput.value !== recordSearchQuery) {
       els.recordSearchInput.value = recordSearchQuery;
     }
     if (els.recordSearchSummary) {
-      els.recordSearchSummary.textContent = total
-        ? isSearching
-          ? `${visibleTotal} of ${total} record(s) match this search.`
-          : "Showing all records. Search can find saved Markdown text."
-        : "Search past drafts, links, and write results.";
+      const searchSummary = total
+      ? isSearching
+        ? currentLanguage === "zh"
+          ? `找到 ${visibleTotal} 条`
+          : `${visibleTotal} found`
+        : ""
+      : "Paste or load Markdown to save the first recoverable draft.";
+      els.recordSearchSummary.dataset.i18n = searchSummary;
+      els.recordSearchSummary.textContent = searchSummary;
     }
-    if (els.clearRecordHistory) els.clearRecordHistory.disabled = total === 0;
+    if (els.clearRecordHistory) els.clearRecordHistory.disabled = recordHistory.length === 0;
     if (!total) {
-      els.recordHistoryList.innerHTML = `<li class="record-history-empty">Load Markdown, run Check, or Write article to create the first record.</li>`;
+      syncRecordEditSheet();
+      els.recordHistoryList.innerHTML = `<li class="record-history-empty">Paste or load Markdown to save the first recoverable draft.</li>`;
       syncRecordPanel();
       return;
     }
     if (!visibleTotal) {
+      syncRecordEditSheet();
       els.recordHistoryList.innerHTML = `
         <li class="record-history-empty">
           <strong>No records match this search.</strong>
@@ -5409,45 +5820,23 @@ console.log("示例代码块");
     }
     els.recordHistoryList.innerHTML = visibleRecords.map(renderRecordHistoryItem).join("");
     translateDynamicDom(els.recordHistory);
+    syncRecordEditSheet();
     syncRecordPanel();
   }
 
   function renderRecordHistoryItem(record) {
     const safe = shared.escapeHtml;
-    const captured = new Date(record.capturedAt);
-    const updated = new Date(record.updatedAt || record.capturedAt);
-    const time = Number.isNaN(captured.getTime())
-      ? record.capturedAt
-      : captured.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    const updatedTime = Number.isNaN(updated.getTime())
-      ? record.updatedAt || record.capturedAt
-      : updated.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const updatedTime = formatRecordTime(record.updatedAt || record.capturedAt);
     const imageText = formatRecordImageText(record);
     const targetText = formatRecordTarget(record);
-    const sourceParts = [
-      record.source?.label || "Draft",
-      record.source?.fileName || ""
-    ].filter(Boolean);
-    const sourceText = sourceParts.join(": ");
-    const summaryItems = recordSummaryItems(record);
+    const sourceText = formatRecordSourceText(record);
+    const summaryItems = recordRecoveryStats(record);
     const summaryHtml = summaryItems.length
       ? `<span class="record-summary">${summaryItems.map((item) => `<span>${safe(item)}</span>`).join("")}</span>`
       : "";
-    const hasMarkdown = recordHasMarkdown(record);
     const markdownText = recordMarkdownText(record);
-    const markdownStatus = hasMarkdown
-      ? record.markdownTruncated
-        ? "Markdown snapshot saved"
-        : "Markdown snapshot saved"
-      : "Markdown snapshot not available";
-    const markdownActionsHtml = hasMarkdown
-      ? `
-            <div class="record-actions">
-              <button class="secondary compact" type="button" data-record-action="restore" data-record-id="${safe(record.id)}">Restore Markdown</button>
-              <button class="secondary compact" type="button" data-record-action="copy-markdown" data-record-id="${safe(record.id)}">Copy Markdown</button>
-            </div>
-          `
-      : "";
+    const displayTitle = recordDisplayTitle(record);
+    const preview = recordMarkdownPreview(record);
     const articleUrl = record.url || "";
     const urlLabel = record.articleId || /\/compose\/articles\/edit\//.test(articleUrl) ? "Article URL" : "Page URL";
     const emptyUrlText = urlLabel === "Article URL" ? "No article URL yet" : "No page URL yet";
@@ -5455,50 +5844,77 @@ console.log("示例代码块");
       ? `<a href="${safe(articleUrl)}" target="_blank" rel="noopener noreferrer">${safe(articleUrl)}</a>`
       : safe(emptyUrlText);
     const draftStats = formatRecordDraftStats(record);
+    const recordState = recordHumanStatus(record);
+    const metaText = recordSourceMeta(record, updatedTime);
+    const showTechnicalDetails = record.tone === "error" || record.kind === "import-error";
+    const linkAction = articleUrl
+      ? `<a class="record-icon-action" href="${safe(articleUrl)}" target="_blank" rel="noopener noreferrer" title="${safe("Open linked page")}" aria-label="${safe("Open linked page")}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6h-2V7.4l-7.3 7.3-1.4-1.4L16.6 6H14V4ZM5 6h7v2H7v9h9v-5h2v7H5V6Z"/></svg>
+        </a>`
+      : `<span class="record-icon-action is-disabled" title="${safe("No link saved")}" aria-label="${safe("No link saved")}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.6 13.4 9.2 12l2.8-2.8L9.8 7H7V4h4l2.4 2.4L16 3.8 17.4 5 5 17.4 3.6 16l7-7Zm2.8 2.8 1.8 1.8H18v-2.8l-1.5-1.5 1.4-1.4 3.1 3.1V21h-5.6L12 17.6l1.4-1.4Z"/></svg>
+        </span>`;
     return `
       <li class="record-history-item" data-tone="${safe(record.tone)}" data-record-id="${safe(record.id)}">
-        <details>
-          <summary>
-            <span class="record-status">${safe(record.status)}</span>
-            <span class="record-title">
-              <strong>${safe(record.title)}</strong>
-              <em>${safe(record.result || sourceText)}</em>
-              ${summaryHtml}
-            </span>
-            <time>${safe(updatedTime || time)}</time>
-          </summary>
-          <div class="record-history-body">
-            ${markdownActionsHtml}
-            <div class="record-url-row">
-              <span>${safe(urlLabel)}</span>
-              ${articleUrlHtml}
+        <article class="record-draft-card">
+          <header class="record-draft-head">
+            <div class="record-title">
+              <strong>${safe(displayTitle)}</strong>
+              <em>${safe(metaText || "Saved Markdown")}</em>
             </div>
-            <dl>
-              <div><dt>Source</dt><dd>${safe(sourceText)}</dd></div>
-              <div><dt>Step</dt><dd>${safe(recordKindLabel(record.kind))}</dd></div>
-              <div><dt>Result</dt><dd>${safe(record.result || record.status)}</dd></div>
-              <div><dt>Markdown</dt><dd>${safe(markdownStatus)}</dd></div>
-              <div><dt>Target</dt><dd>${safe(targetText)}</dd></div>
-              <div><dt>Blocks</dt><dd>${safe(draftStats)}</dd></div>
-              <div><dt>Images</dt><dd>${safe(imageText)}</dd></div>
-              <div><dt>Title</dt><dd>${safe(record.titleResult)}</dd></div>
-              <div><dt>Cover</dt><dd>${safe(record.coverResult)}</dd></div>
-              <div><dt>Elapsed</dt><dd>${safe(record.elapsedMs ? `${(record.elapsedMs / 1000).toFixed(1)}s` : "Not run")}</dd></div>
-              <div><dt>Last update</dt><dd>${safe(updatedTime || time)}</dd></div>
-            </dl>
-            ${hasMarkdown ? `
+            <span class="record-status">${safe(recordState)}</span>
+          </header>
+          <p class="record-draft-preview">${safe(preview)}</p>
+          <div class="record-actions">
+            <div class="record-action-main">
+              <button class="record-use-button" type="button" data-record-action="restore" data-record-id="${safe(record.id)}" title="${safe("Use this saved Markdown in Pending.")}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v2H5V4Zm0 4h8v2H5V8Zm0 4h7v2H5v-2Zm11 1V8h2v5h3l-4 4-4-4h3Zm-3 6h8v2h-8v-2Z"/></svg>
+                <span>${safe("Use")}</span>
+              </button>
+              ${summaryHtml}
+            </div>
+            <div class="record-action-icons" aria-label="${safe("Record actions")}">
+              <button class="record-icon-action" type="button" data-record-action="copy-markdown" data-record-id="${safe(record.id)}" title="${safe("Copy this saved Markdown.")}" aria-label="${safe("Copy this saved Markdown.")}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h10v13H8V7Zm2 2v9h6V9h-6ZM5 4h10v2H7v10H5V4Z"/></svg>
+              </button>
+              <button class="record-icon-action" type="button" data-record-action="edit" data-record-id="${safe(record.id)}" title="${safe("Edit this saved Markdown.")}" aria-label="${safe("Edit this saved Markdown.")}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.8 4.2a2.9 2.9 0 0 1 4.1 4.1L9.7 18.5 5 19l.5-4.7L15.8 4.2Zm1.4 1.4L7.4 15.4l-.2 1.4 1.4-.2 9.8-9.8a.9.9 0 0 0-1.2-1.2Z"/></svg>
+              </button>
+              ${linkAction}
+            </div>
+          </div>
+          ${showTechnicalDetails ? `<details class="record-technical-details">
+            <summary>${safe("Technical details")}</summary>
+            <div class="record-history-body">
+              <div class="record-url-row">
+                <span>${safe(urlLabel)}</span>
+                ${articleUrlHtml}
+              </div>
+              <dl>
+                <div><dt>Source</dt><dd>${safe(sourceText)}</dd></div>
+                <div><dt>Step</dt><dd>${safe(recordKindLabel(record.kind))}</dd></div>
+                <div><dt>Result</dt><dd>${safe(record.result || record.status)}</dd></div>
+                <div><dt>Markdown</dt><dd>${safe(record.markdownTruncated ? "Markdown snapshot saved" : "Markdown snapshot saved")}</dd></div>
+                <div><dt>Target</dt><dd>${safe(targetText)}</dd></div>
+                <div><dt>Blocks</dt><dd>${safe(draftStats)}</dd></div>
+                <div><dt>Images</dt><dd>${safe(imageText)}</dd></div>
+                <div><dt>Title</dt><dd>${safe(record.titleResult)}</dd></div>
+                <div><dt>Cover</dt><dd>${safe(record.coverResult)}</dd></div>
+                <div><dt>Elapsed</dt><dd>${safe(record.elapsedMs ? `${(record.elapsedMs / 1000).toFixed(1)}s` : "Not run")}</dd></div>
+                <div><dt>Last update</dt><dd>${safe(updatedTime)}</dd></div>
+              </dl>
               <details class="record-markdown-details">
                 <summary>Original Markdown</summary>
                 ${record.markdownTruncated ? `<p>${safe("This record saved the first part of a very large Markdown draft.")}</p>` : ""}
                 <pre>${safe(markdownText)}</pre>
               </details>
-            ` : ""}
-            <details class="record-raw-details">
-              <summary>Technical details</summary>
-              <pre>${safe(JSON.stringify(record.evidence, jsonSafeReplacer, 2))}</pre>
-            </details>
-          </div>
-        </details>
+              <details class="record-raw-details">
+                <summary>Technical details</summary>
+                <pre>${safe(JSON.stringify(record.evidence, jsonSafeReplacer, 2))}</pre>
+              </details>
+            </div>
+          </details>` : ""}
+        </article>
       </li>
     `;
   }
@@ -5509,6 +5925,7 @@ console.log("示例代码块");
     activeDraftRecordId = null;
     activeDraftFingerprint = null;
     activeDraftFinalized = false;
+    activeRecordEditorId = null;
     window.clearTimeout(draftInputHistoryTimer);
     if (hasChromeApi()) await chrome.storage.local.remove(STORAGE_RECORD_HISTORY).catch(() => {});
     els.evidenceMeta.textContent = "No local record saved yet.";
@@ -5526,6 +5943,14 @@ console.log("示例代码块");
       log("Markdown snapshot not available.");
       return;
     }
+    restoreRecordMarkdownText(record, markdown, "Markdown restored to Pending.");
+  }
+
+  function restoreRecordMarkdownText(record, markdown, message = "Markdown restored to Pending.") {
+    if (!markdown.trim()) {
+      log("Markdown snapshot not available.");
+      return;
+    }
     suppressNextTypedHistory = true;
     window.clearTimeout(draftInputHistoryTimer);
     els.markdown.value = markdown;
@@ -5533,42 +5958,96 @@ console.log("示例代码块");
     analyzeDraft();
     rememberDraftHistory("restored", {
       forceNew: true,
-      sourceRecordId: record.id,
-      fileName: record.source?.fileName || null,
+      sourceRecordId: record?.id || null,
+      fileName: record?.source?.fileName || null,
       size: markdown.length
     });
     showWorkspacePanel("draft");
     setActiveJump("draft");
-    setDraftDropStatus("Markdown restored", `${markdown.length} characters. Review it, then click Write article.`, "done");
+    setDraftDropStatus("Markdown restored", draftReadyDetail(markdown.length), "done");
+    acknowledgeDraftInput();
     els.markdown.focus?.();
-    log("Markdown restored to Pending.");
+    log(message);
   }
 
-  async function copyRecordMarkdown(recordId) {
-    const record = currentRecord(recordId);
-    const markdown = recordMarkdownText(record);
+  async function copyMarkdownText(markdown, { fallbackRecordId = null, success = "Markdown copied.", fallback = "Markdown is ready in the record details." } = {}) {
     if (!markdown.trim()) {
       log("Markdown snapshot not available.");
       return;
     }
     try {
       await navigator.clipboard.writeText(markdown);
-      log("Markdown copied.");
+      log(success);
     } catch {
-      const item = els.recordHistoryList?.querySelector(`[data-record-id="${CSS.escape(recordId)}"]`);
+      const item = fallbackRecordId ? els.recordHistoryList?.querySelector(`[data-record-id="${CSS.escape(fallbackRecordId)}"]`) : null;
       const details = item?.querySelector(".record-markdown-details");
       if (details) details.open = true;
-      log("Markdown is ready in the record details.");
+      log(fallback);
     }
+  }
+
+  async function copyRecordMarkdown(recordId) {
+    const record = currentRecord(recordId);
+    await copyMarkdownText(recordMarkdownText(record), { fallbackRecordId: recordId });
+  }
+
+  function syncRecordEditSheet() {
+    if (!els.recordEditSheet) return;
+    const record = currentRecord(activeRecordEditorId);
+    if (!record) {
+      els.recordEditSheet.hidden = true;
+      if (els.recordEditTextarea) els.recordEditTextarea.value = "";
+      return;
+    }
+    const updatedTime = formatRecordTime(record.updatedAt || record.capturedAt);
+    if (els.recordEditTitle) els.recordEditTitle.textContent = recordDisplayTitle(record);
+    if (els.recordEditMeta) els.recordEditMeta.textContent = recordSourceMeta(record, updatedTime) || "Saved Markdown";
+    if (els.recordEditTextarea && els.recordEditTextarea.dataset.recordId !== record.id) {
+      els.recordEditTextarea.dataset.recordId = record.id;
+      els.recordEditTextarea.value = recordMarkdownText(record);
+    }
+    els.recordEditSheet.hidden = false;
+    translateDynamicDom(els.recordEditSheet);
+  }
+
+  function openRecordEditor(recordId) {
+    activeRecordEditorId = recordId;
+    syncRecordEditSheet();
+    window.setTimeout(() => els.recordEditTextarea?.focus?.(), 0);
+  }
+
+  function closeRecordEditor() {
+    activeRecordEditorId = null;
+    syncRecordEditSheet();
+  }
+
+  function recordEditorTextarea() {
+    return els.recordEditTextarea || null;
   }
 
   async function handleRecordHistoryClick(event) {
     const button = event.target.closest("button[data-record-action]");
     if (!button) return;
     const action = button.dataset.recordAction;
-    const recordId = button.dataset.recordId;
+    const recordId = button.dataset.recordId || activeRecordEditorId;
     if (action === "restore") {
       restoreRecordMarkdown(recordId);
+    } else if (action === "edit") {
+      openRecordEditor(recordId);
+    } else if (action === "cancel-edit") {
+      closeRecordEditor();
+    } else if (action === "use-edited") {
+      const record = currentRecord(recordId);
+      const edited = recordEditorTextarea()?.value || "";
+      restoreRecordMarkdownText(record, edited, "Edited Markdown restored to Pending.");
+      closeRecordEditor();
+    } else if (action === "copy-edited") {
+      const edited = recordEditorTextarea()?.value || "";
+      await copyMarkdownText(edited, {
+        fallbackRecordId: recordId,
+        success: "Edited Markdown copied.",
+        fallback: "Markdown is ready in the record details."
+      });
     } else if (action === "copy-markdown") {
       await copyRecordMarkdown(recordId);
     }
@@ -5982,6 +6461,7 @@ console.log("示例代码块");
       analyzeDraft();
       window.clearTimeout(draftInputHistoryTimer);
       rememberDraftHistory("paste", { forceNew: true });
+      acknowledgeDraftInput();
     }, 0);
   });
   els.importDraft.addEventListener("click", runImportButtonAction);
@@ -5992,7 +6472,7 @@ console.log("示例代码块");
   els.openArticles.addEventListener("click", openArticles);
   els.runPreflight.addEventListener("click", runPreflight);
   els.loadFile.addEventListener("click", loadFile);
-  els.loadSmoke.addEventListener("click", loadSmokeFixture);
+  els.loadSmoke?.addEventListener("click", loadSmokeFixture);
   els.clearDraft.addEventListener("click", () => {
     els.markdown.value = "";
     saveDraft();
@@ -6014,13 +6494,20 @@ console.log("示例代码块");
     recordSearchQuery = els.recordSearchInput.value || "";
     renderRecordHistory();
   });
-  els.recordHistoryList?.addEventListener("click", handleRecordHistoryClick);
+  els.recordHistory?.addEventListener("click", handleRecordHistoryClick);
+  els.recordEditSheet?.addEventListener("click", (event) => {
+    if (event.target === els.recordEditSheet) closeRecordEditor();
+  });
   els.focusRunbook.addEventListener("click", () => {
     jumpToSection("verify");
     log("Live verification runbook focused.");
   });
   els.languageSelect?.addEventListener("change", () => {
     setLanguage(els.languageSelect.value);
+  });
+  els.themeChoice?.addEventListener("change", (event) => {
+    const input = event.target.closest('input[name="themeMode"]');
+    if (input) setTheme(input.value);
   });
   els.liveRunbookList.addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-runbook-action]");
@@ -6057,6 +6544,8 @@ console.log("示例代码块");
   restoreVaultState();
   restoreRecordHistory();
   restoreLiveResultChecks();
+  restoreTheme();
+  installSystemThemeSync();
   updateLiveProgress();
   refreshPageState();
   restoreLanguage();

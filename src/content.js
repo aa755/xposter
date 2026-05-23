@@ -1232,14 +1232,11 @@
       hint.id = DROP_HINT_ID;
       hint.setAttribute("aria-label", "xPoster drop tray");
       hint.innerHTML = `
-        <div class="__xposter_drop_kicker">Drop into xPoster</div>
         <strong></strong>
         <p></p>
-        <div class="__xposter_drop_slots">
-          <span data-slot="markdown">Markdown</span>
-          <span data-slot="image">Image</span>
-          <span data-slot="folder">Image folder</span>
-        </div>
+        <span class="__xposter_drop_mode" data-slot="markdown" aria-hidden="true"></span>
+        <span class="__xposter_drop_mode" data-slot="image" aria-hidden="true"></span>
+        <span class="__xposter_drop_mode" data-slot="folder" aria-hidden="true"></span>
       `;
       injectDropHintStyle();
       document.body.appendChild(hint);
@@ -1248,17 +1245,19 @@
     hint.dataset.mode = mode;
     const title = hint.querySelector("strong");
     const detail = hint.querySelector("p");
-    if (title) {
-      title.textContent =
-        mode === "folder" ? "Drop image folder here" : mode === "image" ? "Drop image into article" : "Drop Markdown here";
-    }
-    if (detail) {
-      detail.textContent =
-        mode === "folder"
-          ? "xPoster will remember this folder for local image paths. It will not import the article yet."
-          : mode === "image"
-            ? "xPoster will hand the image file to X's own uploader and insert it into the open article."
-          : "xPoster will create or use the open X Article and write the Markdown draft.";
+    const copy = dropHintCopy(mode);
+    if (title) title.textContent = copy.title;
+    if (detail) detail.textContent = copy.detail;
+  }
+
+  function dropHintCopy(mode) {
+    switch (mode) {
+      case "folder":
+        return { title: "Drop image folder", detail: "Release to connect local images." };
+      case "image":
+        return { title: "Drop image", detail: "Release to upload through X." };
+      default:
+        return { title: "Drop Markdown", detail: "Release to write into this article." };
     }
   }
 
@@ -1267,16 +1266,16 @@
   }
 
   function positionDropHint(hint, event) {
-    const width = Math.min(420, Math.max(280, window.innerWidth - 44));
-    const height = 164;
+    const width = Math.min(320, Math.max(248, window.innerWidth - 32));
+    const height = 118;
     const margin = 14;
     const minLeft = margin;
     const maxLeft = Math.max(minLeft, window.innerWidth - width - margin);
     const minTop = margin;
     const maxTop = Math.max(minTop, window.innerHeight - height - margin);
     const left = Math.min(maxLeft, Math.max(minLeft, event.clientX - width / 2));
-    const preferredTop = event.clientY + 24;
-    const fallbackTop = event.clientY - height - 24;
+    const preferredTop = event.clientY + 22;
+    const fallbackTop = event.clientY - height - 22;
     const top = preferredTop <= maxTop
       ? Math.max(minTop, preferredTop)
       : Math.min(maxTop, Math.max(minTop, fallbackTop));
@@ -1306,84 +1305,74 @@
         z-index: 2147483646;
         left: var(--xposter-drop-left, 22px);
         top: var(--xposter-drop-top, 96px);
-        width: min(400px, calc(100vw - 44px));
-        min-height: 164px;
-        transform: translateY(0);
+        width: min(320px, calc(100vw - 32px));
+        min-height: 118px;
+        transform: translate3d(0, 0, 0);
         display: grid;
         align-content: center;
-        gap: 10px;
-        padding: 18px;
-        border: 2px solid #2f6f68;
+        gap: 5px;
+        padding: 18px 20px;
+        border: 2px dashed rgba(15, 20, 25, 0.88);
+        border-radius: 10px;
         background:
-          linear-gradient(110deg, transparent 0 24%, rgba(47, 111, 104, 0.15) 42%, transparent 62%),
-          linear-gradient(135deg, rgba(47, 111, 104, 0.11), rgba(251, 250, 247, 0.96) 42%),
-          #fbfaf7;
-        background-size: 190% 100%, auto, auto;
-        color: #201f1b;
-        box-shadow: 0 24px 66px rgba(32, 31, 27, 0.26);
+          radial-gradient(circle at 50% 0%, rgba(15, 20, 25, 0.08), transparent 52%),
+          rgba(255, 255, 255, 0.98);
+        color: #0f1419;
+        box-shadow: 0 22px 58px rgba(15, 20, 25, 0.22);
         font: 14px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
         letter-spacing: 0;
         pointer-events: none;
-        animation: __xposter_drop_in 220ms cubic-bezier(0.22, 1, 0.36, 1) both, __xposter_drop_sweep 2.8s linear infinite;
+        animation:
+          __xposter_drop_in 220ms cubic-bezier(0.22, 1, 0.36, 1) both,
+          __xposter_drop_breathe 1.45s ease-in-out infinite;
       }
       #${DROP_HINT_ID}::before {
         content: "";
         position: absolute;
-        inset: 10px;
-        border: 1px dashed rgba(47, 111, 104, 0.46);
-      }
-      #${DROP_HINT_ID} .__xposter_drop_kicker {
-        position: relative;
-        color: #2f6f68;
-        font-size: 11px;
-        font-weight: 840;
-        text-transform: uppercase;
+        inset: 8px;
+        border: 1px solid rgba(15, 20, 25, 0.12);
+        border-radius: 6px;
       }
       #${DROP_HINT_ID} strong {
         position: relative;
-        max-width: 18rem;
-        font-size: 20px;
-        line-height: 1.08;
+        max-width: 15rem;
+        font-size: 22px;
+        font-weight: 850;
+        line-height: 1.12;
       }
       #${DROP_HINT_ID} p {
         position: relative;
-        max-width: 26rem;
+        max-width: 16rem;
         margin: 0;
-        color: #5d584f;
+        color: #536471;
         font-size: 13px;
       }
-      #${DROP_HINT_ID} .__xposter_drop_slots {
-        position: relative;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-        margin-top: 4px;
-      }
-      #${DROP_HINT_ID} .__xposter_drop_slots span {
-        min-height: 34px;
-        display: grid;
-        place-items: center;
-        border: 1px solid #d8d2c6;
-        background: rgba(255, 255, 255, 0.38);
-        color: #6b665e;
-        font-size: 11px;
-        font-weight: 820;
-        text-transform: uppercase;
-      }
-      #${DROP_HINT_ID}[data-mode="markdown"] [data-slot="markdown"],
-      #${DROP_HINT_ID}[data-mode="image"] [data-slot="image"],
-      #${DROP_HINT_ID}[data-mode="folder"] [data-slot="folder"] {
-        border-color: #2f6f68;
-        background: #2f6f68;
-        color: #f8fbf8;
+      #${DROP_HINT_ID} .__xposter_drop_mode {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
       }
       @keyframes __xposter_drop_in {
-        from { opacity: 0; transform: translateY(-8px); }
-        to { opacity: 1; transform: translateY(0); }
+        from { opacity: 0; transform: translate3d(0, -6px, 0) scale(0.985); }
+        to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
       }
-      @keyframes __xposter_drop_sweep {
-        from { background-position: 160% 0, 0 0, 0 0; }
-        to { background-position: -60% 0, 0 0, 0 0; }
+      @keyframes __xposter_drop_breathe {
+        0%, 100% {
+          box-shadow:
+            0 22px 58px rgba(15, 20, 25, 0.22),
+            0 0 0 0 rgba(15, 20, 25, 0);
+          transform: scale(1);
+        }
+        50% {
+          box-shadow:
+            0 22px 58px rgba(15, 20, 25, 0.22),
+            0 0 0 7px rgba(15, 20, 25, 0.06);
+          transform: scale(0.996);
+        }
       }
       @media (prefers-reduced-motion: reduce) {
         #${DROP_HINT_ID} {

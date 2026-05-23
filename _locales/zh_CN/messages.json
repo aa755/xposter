@@ -1,0 +1,11 @@
+{
+  "extension_name": {
+    "message": "xPoster"
+  },
+  "extension_description": {
+    "message": "把 Markdown 草稿写入 X 文章的发布工具。"
+  },
+  "action_title": {
+    "message": "xPoster"
+  }
+}
