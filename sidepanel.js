@@ -70,6 +70,9 @@
     reviewList: document.getElementById("reviewList"),
     importDraft: document.getElementById("importDraft"),
     importHint: document.getElementById("importHint"),
+    draftBrief: document.getElementById("draftBrief"),
+    draftRecognized: document.getElementById("draftRecognized"),
+    draftTargetState: document.getElementById("draftTargetState"),
     openArticles: document.getElementById("openArticles"),
     loadFile: document.getElementById("loadFile"),
     loadSmoke: document.getElementById("loadSmoke"),
@@ -323,6 +326,8 @@ console.log("示例代码块");
       "Save draft": "保存草稿",
       "Save only": "仅保存",
       "Write this draft": "写入这篇",
+      "Write to X draft": "写入到 X 草稿",
+      "Writing to X draft...": "正在写入 X 草稿...",
       "Write all drafts": "批量写入",
       "Writing all...": "正在批量写入...",
       "Writing queued drafts one by one.": "正在逐篇写入队列草稿。",
@@ -356,6 +361,14 @@ console.log("示例代码块");
       "Paste text or choose a .md file.": "粘贴文字或选择 .md 文件。",
       "Paste a draft or load a Markdown file.": "粘贴草稿或加载 Markdown 文件。",
       "Paste a draft, choose a Markdown file, or load the example.": "粘贴草稿、选择 Markdown 文件，或加载样例。",
+      "Choose .md file": "选择 .md 文件",
+      "Step 1: paste Markdown, or choose a .md file.": "第一步：粘贴 Markdown，或选择 .md 文件。",
+      "Recognized: nothing yet": "已识别：暂无内容",
+      "Recognized: title, body": "已识别：标题、正文",
+      "Recognized: body": "已识别：正文",
+      "No X Article page detected yet. Write will open or create a draft.": "还没有检测到 X 文章页，点击写入时会打开/创建草稿。",
+      "Will write to the currently open X Article draft.": "将写入当前打开的 X 文章草稿。",
+      "X Articles is open; Write will open or create a draft.": "X 文章页已打开，点击写入时会打开或创建草稿。",
       "Input Markdown": "输入 Markdown",
       "Paste or drop your draft.": "粘贴或拖入草稿。",
       "Add or drop your draft.": "添加或拖入草稿。",
@@ -473,7 +486,7 @@ console.log("示例代码块");
       "Loaded": "已载入",
       "Loading the dropped content into the draft box.": "正在读取拖入的 Markdown。",
       "Adding the dropped content to Pending.": "正在读取拖入的 Markdown。",
-      "characters. Review it, then click Write article.": "个字符。检查后点击写入文章。",
+      "characters. Review it, then click Write to X draft.": "个字符。检查后点击写入到 X 草稿。",
       "That drop did not include Markdown text or a .md file.": "这次拖入没有包含 Markdown 文本或 .md 文件。",
       "Try a .md, .markdown, .txt file, or plain Markdown text.": "请拖入 .md、.markdown、.txt 文件，或普通 Markdown 文本。",
       "Web images stayed as links?": "网页图片保留成链接？",
@@ -753,7 +766,6 @@ console.log("示例代码块");
       "Add one draft or drop Markdown files here.": "添加一篇草稿，或把 Markdown 文件拖到这里。",
       "Create draft": "新建草稿",
       "Load this draft": "载入这篇草稿",
-      "Remove from queue": "从队列移除",
       Current: "当前",
       Queued: "待处理",
       Writing: "正在写入",
@@ -774,7 +786,6 @@ console.log("示例代码块");
       "Markdown queued": "Markdown 已加入队列",
       "Queued Markdown": "已加入待发布队列",
       "Queued Markdown loaded.": "已载入队列中的 Markdown。",
-      "Queued Markdown removed.": "已从队列移除。",
       "No new Markdown drafts were added.": "没有新的 Markdown 草稿需要加入。",
       "Drop multiple Markdown files to queue them here. Open one draft when you are ready to write.": "拖入多篇 Markdown 后会先放在这里。准备写入时再打开其中一篇。",
       Blocks: "块",
@@ -1141,7 +1152,7 @@ console.log("示例代码块");
       "Waiting for Markdown or Write.": "等待 Markdown 或写入操作。",
       "Waiting for import": "等待导入",
       "Nothing is running": "当前没有运行任务",
-      "Drop or paste a draft, then click Write article.": "拖入或粘贴草稿后，点击写入文章。",
+      "Drop or paste a draft, then click Write to X draft.": "拖入或粘贴草稿后，点击写入到 X 草稿。",
       "Article writing progress": "文章写入进度",
       "No writing updates yet": "暂无写入更新",
       "Write progress appears here while xPoster fills X.": "xPoster 写入 X 时，这里会显示进度。",
@@ -1173,6 +1184,7 @@ console.log("示例代码块");
       "Write Article": "写入文章",
       "2. Write Article": "2. 写入文章",
       "Write to X Article": "写入 X 文章",
+      "Write to X draft": "写入到 X 草稿",
       "Write article": "写入文章",
       "Write all drafts": "批量写入",
       "Writing all...": "正在批量写入...",
@@ -1199,7 +1211,9 @@ console.log("示例代码块");
       "Batch draft writing started.": "开始批量写入草稿。",
       "Queued draft not found": "未找到队列草稿",
       "Writing into X. You can watch the final result in the X Article tab.": "正在写入 X。可以在 X 文章标签页查看结果。",
+      "Writing into the X draft. You can watch the final result in the X Article tab.": "正在写入 X 草稿。可以在 X 文章标签页查看结果。",
       "Writing...": "正在写入...",
+      "Writing to X draft...": "正在写入 X 草稿...",
       "Writing article started.": "开始写入文章。",
       "Writing queued": "写入已排队",
       "Writing started from side panel.": "已从侧边栏开始写入。",
@@ -1212,6 +1226,7 @@ console.log("示例代码块");
       "Article is written.": "文章已写入。",
       "Written. Review and publish in X.": "已写入。请在 X 中检查并发布。",
       "Markdown ready.": "Markdown 已准备好。",
+      "Ready. xPoster will fill the open X Article, then you review it before publishing.": "准备好了。xPoster 会填入打开的 X 文章草稿，然后由你检查并发布。",
       "Local images": "本地图片",
       "Local image folder": "本地图片文件夹",
       "Not configured": "未配置",
@@ -1733,8 +1748,11 @@ console.log("示例代码块");
   }
 
   function translateText(text) {
-    if (i18n) return i18n.t(sourceText(text));
     const source = sourceText(text);
+    if (i18n) {
+      const translated = i18n.t(source);
+      if (translated !== source || currentLanguage !== "zh") return translated;
+    }
     if (currentLanguage !== "zh") return source;
     const direct = ZH_TEXT.get(source);
     if (direct) return direct;
@@ -1823,8 +1841,8 @@ console.log("示例代码块");
       [/^(\d+) blocks loaded; title detected\.$/, "已加载 $1 个块；已检测标题。"],
       [/^(\d+) blocks loaded; title missing\.$/, "已加载 $1 个块；未检测标题。"],
       [/^(\d+) block\(s\), (\d+) character\(s\), ready to write\.$/, "$1 个块，$2 个字符，可以写入。"],
-      [/^Loaded (\d+) characters\. Review it, then click Write article\.$/, "已载入 $1 个字符。检查后点击写入文章。"],
-      [/^(\d+) characters\. Review it, then click Write article\.$/, "$1 个字符。检查后点击写入文章。"],
+      [/^Loaded (\d+) characters\. Review it, then click Write to X draft\.$/, "已载入 $1 个字符。检查后点击写入到 X 草稿。"],
+      [/^(\d+) characters\. Review it, then click Write to X draft\.$/, "$1 个字符。检查后点击写入到 X 草稿。"],
       [/^(\d+) characters, ready to write\.$/, "$1 字符，可以写入。"],
       [/^(\d+(?:,\d+)*) chars$/, "$1 字"],
       [/^Queued (\d+) Markdown draft(?:s)?\.$/, "已加入 $1 篇 Markdown 草稿。"],
@@ -1842,10 +1860,15 @@ console.log("示例代码块");
       [/^(\d+) image\(s\) ready, (\d+) need attention$/, "$1 张图片已就绪，$2 张保留为链接"],
       [/^(\d+) image\(s\) uploaded$/, "$1 张图片已上传"],
       [/^(\d+) web image\(s\) will be tried during Write\.$/, "$1 张网页图片会在写入时尝试处理。"],
+      [/^(\d+) web image\(s\) will be tried while writing to X draft\.$/, "$1 张网页图片会在写入时尝试上传。"],
       [/^(\d+) web image\(s\) may stay as links unless replaced\.$/, "$1 张网页图片可能保留为链接，除非替换为可下载图片。"],
+      [/^(\d+) web image\(s\) may stay as links unless the URLs are replaced\.$/, "$1 张网页图片可能保留为链接，除非替换为可访问 URL。"],
       [/^(\d+) web image\(s\) will upload through X when reachable\.$/, "$1 张网页图片可访问时会通过 X 上传。"],
-      [/^(\d+) web image\(s\) will be handled during Write\. Unreachable images stay as links\.$/, "$1 张网页图片会在写入时处理；无法访问的图片会保留为链接。"],
+      [/^(\d+) web image\(s\) will upload through X when reachable while writing to X draft\.$/, "$1 张网页图片可访问时会通过 X 上传。"],
+      [/^(\d+) web image\(s\) will be handled during Write\. Unreachable images stay as links\.$/, "$1 张网页图片会在写入时尝试上传；无法访问时会保留为链接。"],
+      [/^(\d+) web image\(s\) will be tried while writing to X draft\. Unreachable images stay as links\.$/, "$1 张网页图片会在写入时尝试上传；无法访问时会保留为链接。"],
       [/^(\d+) image\(s\) will upload through X when possible\.$/, "$1 张图片会尽量通过 X 上传。"],
+      [/^(\d+) image\(s\) will upload through X when possible while writing to X draft\.$/, "$1 张图片会在写入 X 草稿时尽量通过 X 上传。"],
       [/^(\d+) upload items need the X editor\.$/, "$1 个上传项需要 X 编辑器。"],
       [/^(\d+) upload item need the X editor\.$/, "$1 个上传项需要 X 编辑器。"],
       [/^(\d+) media upload item\(s\) can use X upload handler\.$/, "$1 个媒体上传项可使用 X 上传能力。"],
@@ -1954,6 +1977,8 @@ console.log("示例代码块");
       [/^(\d+) image\(s\)$/, "$1 张图片"],
       [/^(\d+) table\(s\)$/, "$1 个表格"],
       [/^(\d+) special block\(s\)$/, "$1 个特殊内容"],
+      [/^Recognized: (.+)$/, "已识别：$1"],
+      [/^(\d+) web image\(s\)$/, "$1 张网页图片"],
       [/^(\d+) text part\(s\) · (\d+) image\(s\) · (\d+) table\(s\) · (\d+) special block\(s\) · image links convert during Import$/, "$1 个文本部分 · $2 张图片 · $3 个表格 · $4 个特殊内容 · 图片链接会在导入时转换"],
       [/^Text blocks (\d+)$/, "文本块 $1"],
       [/^Special blocks (\d+)$/, "特殊块 $1"],
@@ -2098,7 +2123,18 @@ console.log("示例代码块");
   }
 
   function localizeText(text) {
-    return i18n?.t(String(text || "")) || translateText(String(text || ""));
+    const source = String(text || "");
+    if (!i18n) return translateText(source);
+    const translated = i18n.t(source);
+    return translated === source ? translateText(source) : translated;
+  }
+
+  function setLocalizedText(node, source) {
+    if (!node) return;
+    delete node.dataset.i18n;
+    node.__xposterSourceText = source;
+    node.textContent = localizeText(source);
+    if (node.firstChild?.nodeType === Node.TEXT_NODE) node.firstChild.__xposterSourceText = source;
   }
 
   function translateEvidencePlaceholder(root = document.body) {
@@ -2117,6 +2153,7 @@ console.log("示例代码块");
       await i18n.setLanguage(currentLanguage, { persist, render: false });
     }
     translateDynamicDom();
+    updateDraftBrief();
     if (persist && hasChromeApi()) {
       chrome.storage.local.set({ [STORAGE_LANGUAGE]: currentLanguage });
     }
@@ -2236,6 +2273,52 @@ console.log("示例代码块");
       } catch {}
     }
     return Array.from(origins);
+  }
+
+  function pluralizeUnit(count, singular, plural = `${singular}s`) {
+    return `${count} ${count === 1 ? singular : plural}`;
+  }
+
+  function formatRecognizedItem(count, enSingular, enPlural, zhUnit) {
+    if (currentLanguage === "zh") return `${count} ${zhUnit}`;
+    return pluralizeUnit(count, enSingular, enPlural);
+  }
+
+  function draftRecognitionText(parsed = latestParsed, counts = latestCounts) {
+    if (!parsed?.segments?.length) return "Step 1: paste Markdown, or choose a .md file.";
+    const resolvedCounts = counts || shared.segmentCounts(parsed.segments);
+    const parts = [];
+    if (parsed.title) parts.push(currentLanguage === "zh" ? "标题" : "title");
+    if (resolvedCounts.text) parts.push(currentLanguage === "zh" ? "正文" : "body");
+    const remoteImages = remoteHttpImageSegments(parsed).length;
+    const localImages = Math.max(0, (resolvedCounts.image || 0) - remoteImages);
+    if (remoteImages) parts.push(formatRecognizedItem(remoteImages, "web image", "web images", "张网页图片"));
+    if (localImages) parts.push(formatRecognizedItem(localImages, "local image", "local images", "张本地图片"));
+    if (resolvedCounts.table) parts.push(formatRecognizedItem(resolvedCounts.table, "table", "tables", "个表格"));
+    if (resolvedCounts.tweet) parts.push(formatRecognizedItem(resolvedCounts.tweet, "tweet", "tweets", "条推文"));
+    if (resolvedCounts.code) parts.push(formatRecognizedItem(resolvedCounts.code, "code block", "code blocks", "个代码块"));
+    if (resolvedCounts.divider) parts.push(formatRecognizedItem(resolvedCounts.divider, "divider", "dividers", "条分隔线"));
+    const summary = parts.length ? parts.join(currentLanguage === "zh" ? "、" : ", ") : currentLanguage === "zh" ? "正文" : "body";
+    return currentLanguage === "zh" ? `已识别：${summary}` : `Recognized: ${summary}`;
+  }
+
+  function draftTargetStateText() {
+    const status = latestPageStatus || {};
+    if (status.hasEditor) return "Will write to the currently open X Article draft.";
+    if (status.isArticleRoute) return "X Articles is open; Write will open or create a draft.";
+    return "No X Article page detected yet. Write will open or create a draft.";
+  }
+
+  function updateDraftBrief() {
+    const hasDraft = Boolean(latestParsed?.segments?.length);
+    if (els.draftPanel) els.draftPanel.dataset.emptyDraft = hasDraft || queueModeActive() ? "false" : "true";
+    if (!els.draftBrief) return;
+    els.draftBrief.dataset.tone = hasDraft ? "ready" : "idle";
+    setLocalizedText(els.draftRecognized, draftRecognitionText());
+    if (els.draftTargetState) {
+      els.draftTargetState.hidden = !hasDraft;
+      if (hasDraft) setLocalizedText(els.draftTargetState, draftTargetStateText());
+    }
   }
 
   function remoteImageProbeKey(segment) {
@@ -2565,6 +2648,7 @@ console.log("示例代码块");
       els.markdown.setAttribute("aria-hidden", hasQueue ? "true" : "false");
       els.markdown.tabIndex = hasQueue ? -1 : 0;
     }
+    updateDraftBrief();
   }
 
   function setSingleDraftMarkdown(markdown, { source = "typed", fileName = null, statusTitle = "Markdown loaded", logMessage = "", remember = true } = {}) {
@@ -2650,9 +2734,6 @@ console.log("示例代码块");
           <button class="record-icon-action draft-queue-copy" type="button" data-queue-action="copy" data-queue-id="${safe(item.id)}" title="${safe(localizeText("Copy text"))}" aria-label="${safe(localizeText("Copy text"))}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h10v13H8V7Zm2 2v9h6V9h-6ZM5 4h10v2H7v10H5V4Z"/></svg>
           </button>
-          <button class="record-icon-action draft-queue-remove" type="button" data-queue-action="remove" data-queue-id="${safe(item.id)}" title="${safe(localizeText("Remove from queue"))}" aria-label="${safe(localizeText("Remove from queue"))}">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l1 2h4v2H3V5h4l1-2Zm1 6h2v10H9V9Zm4 0h2v10h-2V9Zm4 0h2l-1 12H6L5 9h2l.7 10h8.6L17 9Z"/></svg>
-          </button>
         </div>
       </li>
     `).join("");
@@ -2713,10 +2794,6 @@ console.log("示例代码块");
       await copyMarkdownText(item?.markdown || "", { success: "Queued Markdown copied." });
       return;
     }
-    if (button.dataset.queueAction === "remove") {
-      removeQueueItem(id);
-      log("Queued Markdown removed.");
-    }
   }
 
   function loadQueueItem(id, { persist = true, remember = true } = {}) {
@@ -2745,23 +2822,6 @@ console.log("示例代码块");
     renderDraftQueue();
     updateWriteButton();
     return true;
-  }
-
-  function removeQueueItem(id) {
-    const wasActive = id === activeQueueItemId;
-    draftQueue = draftQueue.filter((item) => item.id !== id);
-    if (wasActive) activeQueueItemId = null;
-    if (!draftQueue.length) {
-      suppressNextTypedHistory = true;
-      window.clearTimeout(draftInputHistoryTimer);
-      els.markdown.value = "";
-      saveDraft();
-      analyzeDraft();
-      updateWriteButton();
-      setDraftDropStatus("Markdown draft", "Paste Markdown here, choose a file, or drop .md files.", "idle");
-    }
-    persistDraftQueue();
-    renderDraftQueue();
   }
 
   function markActiveQueueItemWritten() {
@@ -2955,6 +3015,7 @@ console.log("示例代码块");
       latestCounts = shared.segmentCounts([]);
       els.inspector?.setAttribute("data-has-draft", "false");
       syncRemoteImageAccessStatusFromDraft(null);
+      updateDraftBrief();
       els.titleMetric.textContent = "None";
       els.imageMetric.textContent = "0";
       els.tableMetric.textContent = "0";
@@ -2978,6 +3039,7 @@ console.log("示例代码块");
       latestCounts = counts;
       els.inspector?.setAttribute("data-has-draft", "true");
       syncRemoteImageAccessStatusFromDraft(parsed);
+      updateDraftBrief();
       if (hasChromeApi() && remoteHttpImageSegments(parsed).length) {
         refreshRemoteImageAccessStatus(parsed).catch(() => {});
       }
@@ -3653,8 +3715,8 @@ console.log("示例代码块");
 
   function primaryImportAction(gate) {
     if (queueModeActive()) return { action: "batch", label: "Write all drafts", enabled: !batchWriting };
-    if (latestParsed?.segments?.length) return { action: "import", label: "Write article", enabled: !batchWriting };
-    return { action: "blocked", label: "Write article", enabled: false };
+    if (latestParsed?.segments?.length) return { action: "import", label: "Write to X draft", enabled: !batchWriting };
+    return { action: "blocked", label: "Write to X draft", enabled: false };
   }
 
   function focusMarkdownInput() {
@@ -3680,7 +3742,7 @@ console.log("示例代码块");
     const svg = els.importDraft.querySelector("svg")?.outerHTML || IMPORT_ICON_SVG;
     els.importDraft.innerHTML = `${svg}<span></span>`;
     const labelNode = els.importDraft.querySelector("span");
-    if (labelNode) labelNode.textContent = label;
+    if (labelNode) setLocalizedText(labelNode, label);
     translateDynamicDom(els.importDraft);
   }
 
@@ -3703,7 +3765,7 @@ console.log("示例代码块");
   function applyImportActionToButton(button, action) {
     if (!button || !action) return;
     button.disabled = !action.enabled;
-    button.textContent = action.label;
+    setLocalizedText(button, action.label);
   }
 
   function updateWriteButton({ busy = false } = {}) {
@@ -3719,24 +3781,24 @@ console.log("示例代码块");
       batchWriting
         ? "Writing all..."
         : busy
-          ? "Writing..."
+          ? "Writing to X draft..."
           : hasQueue
             ? "Write all drafts"
             : hasDraft
-              ? "Write article"
+              ? "Write to X draft"
               : "Add Markdown first"
     );
     if (els.importHint) {
       const hint = compactWriteHint({ hasDraft, hasQueue, busy: busy || batchWriting });
       els.importHint.dataset.tone = hint.tone;
       delete els.importHint.dataset.i18n;
-      els.importHint.textContent = hint.text;
+      setLocalizedText(els.importHint, hint.text);
     }
     translateDynamicDom(actions || button);
   }
 
   function compactWriteHint({ hasDraft, hasQueue = false, busy = false } = {}) {
-    if (busy) return { tone: "ready", text: hasQueue ? "Writing queued drafts one by one." : "Writing into X. You can watch the final result in the X Article tab." };
+    if (busy) return { tone: "ready", text: hasQueue ? "Writing queued drafts one by one." : "Writing into the X draft. You can watch the final result in the X Article tab." };
     if (hasQueue) return { tone: "ready", text: "Queued drafts are written one by one. Each successful draft leaves the list." };
     if (!hasDraft) return { tone: "idle", text: "Add a Markdown draft first." };
     const remoteCount = remoteHttpImageSegments(latestParsed).length;
@@ -3745,25 +3807,25 @@ console.log("示例代码块");
     return {
       tone: "ready",
       text: imageCount
-        ? `${imageCount} image(s) will upload through X when possible.`
+        ? `${imageCount} image(s) will upload through X when possible while writing to X draft.`
         : "Uses current X Article, or creates one."
     };
   }
 
   function remoteImageWriteHint(remoteCount) {
     if (remoteImageProbeStatus.state === "checking") {
-      return { tone: "ready", text: `${remoteCount} web image(s) will be tried during Write.` };
+      return { tone: "ready", text: `${remoteCount} web image(s) will be tried while writing to X draft.` };
     }
     if (remoteImageProbeStatus.state === "checked" && remoteImageProbeStatus.fail) {
       return {
         tone: "warn",
-        text: `${remoteImageProbeStatus.fail} web image(s) may stay as links unless replaced.`
+        text: `${remoteImageProbeStatus.fail} web image(s) may stay as links unless the URLs are replaced.`
       };
     }
     if (remoteImageProbeStatus.state === "checked") {
-      return { tone: "ready", text: `${remoteCount} web image(s) will upload through X when reachable.` };
+      return { tone: "ready", text: `${remoteCount} web image(s) will upload through X when reachable while writing to X draft.` };
     }
-    return { tone: "ready", text: `${remoteCount} web image(s) will be handled during Write. Unreachable images stay as links.` };
+    return { tone: "ready", text: `${remoteCount} web image(s) will be tried while writing to X draft. Unreachable images stay as links.` };
   }
 
   function updateNextAction(checks = null, gate = null) {
@@ -3861,9 +3923,9 @@ console.log("示例代码块");
     if (!latestEvidence?.kind?.startsWith("import")) {
       return {
         tone: "ready",
-        title: "Write article",
+        title: "Write to X draft",
         detail: "Ready. xPoster will fill the open X Article, then you review it before publishing.",
-        button: "Write article",
+        button: "Write to X draft",
         action: "import"
       };
     }
@@ -3933,7 +3995,7 @@ console.log("示例代码块");
       {
         id: "import",
         tone: liveResult.complete ? "ok" : hasImportEvidence ? "ok" : hasDraft || hasQueue ? "ready" : "idle",
-        title: hasQueue ? "Write queue" : "Write article",
+        title: hasQueue ? "Write queue" : "Write to X draft",
         detail: liveResult.complete
           ? "Article is written."
           : hasImportEvidence
@@ -4771,7 +4833,7 @@ console.log("示例代码块");
 
   function draftReadyDetail(length) {
     const formattedLength = Number(length || 0).toLocaleString();
-    return currentLanguage === "zh" ? `${formattedLength} 字，可写入` : `${formattedLength} chars, ready`;
+    return currentLanguage === "zh" ? `${formattedLength} 字，可写入到 X 草稿` : `${formattedLength} chars, ready to write to X draft`;
   }
 
   function createLiveProgressState() {
@@ -4780,7 +4842,7 @@ console.log("示例代码块");
       state: "idle",
       level: "idle",
       text: "Nothing is running",
-      detail: "Drop or paste a draft, then click Write article.",
+      detail: "Drop or paste a draft, then click Write to X draft.",
       percent: 0,
       startedAt: null,
       updatedAt: now,
@@ -5007,7 +5069,7 @@ console.log("示例代码块");
           latestProgress.state = "idle";
           latestProgress.level = "idle";
           latestProgress.text = "Nothing is running";
-          latestProgress.detail = "Drop or paste a draft, then click Write article.";
+          latestProgress.detail = "Drop or paste a draft, then click Write to X draft.";
           latestProgress.percent = 0;
         }
       } else {
@@ -5397,6 +5459,7 @@ console.log("示例代码块");
       latestDiagnostics = null;
       setPageState("Not on X", "warn");
       setReadiness({ target: "Open X", editor: "Unknown", vault: "Optional" });
+      updateDraftBrief();
       updatePreflight();
       return;
     }
@@ -5406,6 +5469,7 @@ console.log("示例代码块");
       latestDiagnostics = null;
       setPageState("Refresh X", "warn");
       setReadiness({ target: "X tab", editor: "Reload", vault: "Optional" });
+      updateDraftBrief();
       updatePreflight();
       return;
     }
@@ -5427,6 +5491,7 @@ console.log("示例代码块");
           : "Permission"
         : "Optional"
     });
+    updateDraftBrief();
     updatePreflight();
   }
 

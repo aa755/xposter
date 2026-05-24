@@ -31,7 +31,7 @@
           <li data-step="import" data-tone="idle">
             <span class="step-number">2</span>
             <div>
-              <strong>Write article</strong>
+              <strong>Write to X draft</strong>
               <span>Use the current X Article or create one.</span>
             </div>
           </li>
@@ -126,18 +126,23 @@
         <button class="tab" type="button" data-tab="settings" data-i18n="Settings">Settings</button>
       </nav>
 
-      <section class="composer panel active" id="draftPanel" data-panel="draft">
+      <section class="composer panel active" id="draftPanel" data-panel="draft" data-empty-draft="true">
         <div class="composer-head">
           <span class="composer-title" data-i18n="Markdown draft">Markdown draft</span>
           <div class="toolbar">
-            <button class="icon-button" id="loadFile" title="Choose Markdown file" aria-label="Choose Markdown file" data-i18n-title="Choose Markdown file" data-i18n-aria-label="Choose Markdown file">
+            <button class="icon-button" id="loadFile" title="Choose .md file" aria-label="Choose .md file" data-i18n-title="Choose .md file" data-i18n-aria-label="Choose .md file">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1 2.5L17.5 9H13V4.5ZM8 13h3V9h2v4h3l-4 4-4-4Z"/></svg>
+              <span data-i18n="Choose .md file">Choose .md file</span>
             </button>
           </div>
         </div>
         <div class="drop-status" id="draftDropStatus" data-tone="idle" aria-live="polite">
           <strong data-i18n="Markdown draft">Markdown draft</strong>
           <span data-i18n="Paste Markdown here, choose a file, or drop .md files.">Paste Markdown here, choose a file, or drop .md files.</span>
+        </div>
+        <div class="draft-brief" id="draftBrief" data-tone="idle" aria-live="polite">
+          <span id="draftRecognized" data-i18n="Step 1: paste Markdown, or choose a .md file.">Step 1: paste Markdown, or choose a .md file.</span>
+          <span id="draftTargetState" hidden></span>
         </div>
         <textarea id="markdown" spellcheck="false" placeholder="# Article title&#10;&#10;Paste Markdown here."></textarea>
         <section class="draft-queue" id="draftQueue" aria-label="Pending Markdown queue" data-i18n-aria-label="Pending Markdown queue" hidden>
@@ -150,11 +155,11 @@
           <ol class="draft-queue-list" id="draftQueueList"></ol>
         </section>
 
-        <section class="actions publish-dock" aria-label="Write article" data-empty="true">
+        <section class="actions publish-dock" aria-label="Write to X draft" data-empty="true">
           <div class="action-primary-block">
             <button class="primary" id="importDraft" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v3H4V4Zm0 5h10v3H4V9Zm0 5h8v3H4v-3Zm13.5-.7V9h2v4.3l1.6-1.6 1.4 1.4-3.5 3.5-3.5-3.5 1.4-1.4 1.6 1.6ZM17 18h5v2h-5v-2Z"/></svg>
-              <span data-i18n="Write article">Write article</span>
+              <span data-i18n="Write to X draft">Write to X draft</span>
             </button>
           </div>
           <div class="action-secondary-block" aria-label="Other actions" hidden>
@@ -165,7 +170,7 @@
           <section class="inline-write-status" id="liveProgress" aria-label="Article writing progress" data-tone="idle" hidden>
             <div>
               <strong id="liveProgressTitle">Nothing is running</strong>
-              <span id="liveProgressDetail">Drop or paste a draft, then click Write article.</span>
+              <span id="liveProgressDetail">Drop or paste a draft, then click Write to X draft.</span>
             </div>
             <span class="progress-state" id="liveProgressState">Idle</span>
             <span class="progress-meter" aria-label="Writing progress meter"><span id="liveProgressBar"></span></span>

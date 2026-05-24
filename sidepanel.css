@@ -931,7 +931,7 @@ h2 {
 .composer {
   position: relative;
   min-height: min(720px, calc(100dvh - 104px));
-  grid-template-rows: auto auto auto auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   border: 1px solid var(--line);
   background: color-mix(in oklch, var(--paper), transparent 14%);
   transform-origin: 50% 0;
@@ -1087,6 +1087,7 @@ h2 {
 }
 
 :root[data-theme="dark"] .drop-status,
+:root[data-theme="dark"] .draft-brief,
 :root[data-theme="dark"] .draft-queue-item,
 :root[data-theme="dark"] .draft-queue-empty,
 :root[data-theme="dark"] .record-history-item,
@@ -1106,7 +1107,7 @@ h2 {
 }
 
 .draft-queue {
-  grid-row: 3;
+  grid-row: 4;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
@@ -1291,8 +1292,7 @@ h2 {
 }
 
 .draft-queue-edit,
-.draft-queue-copy,
-.draft-queue-remove {
+.draft-queue-copy {
   width: 28px;
   height: 28px;
 }
@@ -1307,6 +1307,7 @@ h2 {
 
 .composer.drag-active .composer-head,
 .composer.drag-active .draft-queue,
+.composer.drag-active .draft-brief,
 .composer.drag-active #markdown {
   opacity: .34;
   pointer-events: none;
@@ -1393,9 +1394,64 @@ h2 {
   fill: currentColor;
 }
 
+.icon-button span {
+  display: none;
+}
+
+.composer[data-empty-draft="true"] #loadFile {
+  width: auto;
+  min-width: 30px;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  gap: 6px;
+  padding-inline: 9px;
+  border: 1px solid var(--line);
+  color: var(--signal-text);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.composer[data-empty-draft="true"] #loadFile span {
+  display: inline;
+  white-space: nowrap;
+}
+
+.draft-brief {
+  grid-row: 3;
+  display: grid;
+  gap: 2px;
+  min-height: 36px;
+  padding: 7px 12px 8px;
+  border-bottom: 1px solid color-mix(in oklch, var(--line), transparent 54%);
+  background: color-mix(in oklch, var(--paper), var(--paper-2) 8%);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.draft-brief[data-tone="ready"] {
+  color: var(--ink);
+  background: color-mix(in oklch, var(--paper), var(--signal) 4%);
+}
+
+.draft-brief span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-brief #draftRecognized {
+  font-weight: 760;
+}
+
+.draft-brief #draftTargetState {
+  color: var(--muted);
+}
+
 #markdown {
   display: block;
-  grid-row: 3;
+  grid-row: 4;
   min-height: min(430px, calc(100dvh - 292px));
   border-top: 1px solid color-mix(in oklch, var(--line), transparent 72%);
   border-bottom: 1px solid color-mix(in oklch, var(--line), transparent 38%);
@@ -4109,7 +4165,7 @@ textarea:focus-visible,
 
   .composer {
     min-height: min(700px, calc(100dvh - 92px));
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   }
 
   #markdown,
@@ -4356,14 +4412,12 @@ textarea:focus-visible,
   .record-search input,
   .record-use-button,
   .record-icon-action,
-  .draft-queue-remove,
   .theme-control span {
     min-height: 44px;
   }
 
   .icon-button,
-  .record-icon-action,
-  .draft-queue-remove {
+  .record-icon-action {
     width: 44px;
     height: 44px;
   }
