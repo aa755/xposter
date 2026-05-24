@@ -6,6 +6,11 @@
   const IMPORT_BUTTON_ID = "__xposter_import_button__";
   const DROP_HINT_ID = "__xposter_drop_hint__";
   const SIDEPANEL_DRAFT_STORAGE_KEY = "xposter_sidepanel_draft";
+  const THEME_STORAGE_KEY = "xposter_theme";
+  const SIDEPANEL_QUEUE_STORAGE_KEY = "xposter_publish_queue";
+  const MAX_SIDEPANEL_QUEUE_ITEMS = 24;
+  const MAX_SIDEPANEL_QUEUE_STORAGE_BYTES = 4 * 1024 * 1024;
+  const MAX_SIDEPANEL_QUEUE_ITEM_BYTES = 512 * 1024;
   const ORIGINAL_IMPORTER_MARKERS = [
     { label: "original import button", selector: "#__xmp_import_btn__, [id*='__xmp_import_btn__']" },
     { label: "original vault prompt", selector: "#__xmp_vault_prompt__" },
@@ -90,11 +95,79 @@
     return cleaned.length > maxLength ? `${cleaned.slice(0, Math.max(0, maxLength - 3))}...` : cleaned;
   }
 
+  function statusThemeFromPage() {
+    for (const element of [document.body, document.documentElement]) {
+      if (!element) continue;
+      const match = getComputedStyle(element).backgroundColor.match(
+        /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:\s*[,/]\s*([\d.]+))?/i
+      );
+      if (!match || Number(match[4] ?? 1) === 0) continue;
+      const luminance = Number(match[1]) * 0.299 + Number(match[2]) * 0.587 + Number(match[3]) * 0.114;
+      return luminance < 128 ? "dark" : "light";
+    }
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function syncStatusTheme(card) {
+    card.dataset.theme = statusThemeFromPage();
+    if (typeof chrome === "undefined" || !chrome.storage?.local) return;
+    chrome.storage.local.get(THEME_STORAGE_KEY).then((stored) => {
+      if (!card.isConnected) return;
+      const selectedTheme = stored?.[THEME_STORAGE_KEY];
+      card.dataset.theme = selectedTheme === "light" || selectedTheme === "dark"
+        ? selectedTheme
+        : statusThemeFromPage();
+    }).catch(() => {});
+  }
+
+  function statusProgressForText(text, level) {
+    if (level === "done" || level === "queue") return 100;
+    const normalized = normalizeText(text).toLowerCase();
+    const progressMatch = normalized.match(/(\d+)\s*\/\s*(\d+)/);
+    const fraction = progressMatch && Number(progressMatch[2]) > 0
+      ? Math.min(1, Number(progressMatch[1]) / Number(progressMatch[2]))
+      : null;
+    const progress = (start, span = 0) => Math.round(start + span * (fraction ?? 0));
+
+    if (/preparing markdown/.test(normalized)) return 6;
+    if (/preparing (?:\d+\s+)?image|prepared \d/.test(normalized)) return progress(10, 18);
+    if (/rendering \d+ table/.test(normalized)) return 32;
+    if (/writing into x editor|pasting structured/.test(normalized)) return 40;
+    if (/inserting \d+ special/.test(normalized)) return 51;
+    if (/uploading image/.test(normalized)) return progress(56, 24);
+    if (/reordering uploaded/.test(normalized)) return 84;
+    if (/setting (title|cover)/.test(normalized)) return 90;
+    if (/cleaning up import markers/.test(normalized)) return 96;
+    if (/downloading dropped image/.test(normalized)) return 28;
+    if (/adding .*image/.test(normalized)) return 62;
+    return null;
+  }
+
+  function updateStatusProgress(card, text, level, previousLevel) {
+    let percent = statusProgressForText(text, level);
+    if (percent == null && previousLevel === "work" && /^retrying\b/i.test(normalizeText(text))) {
+      const retained = Number(card.dataset.progressValue);
+      percent = Number.isFinite(retained) && retained > 0 ? retained : null;
+    }
+    const hasProgress = Number.isFinite(percent);
+    card.dataset.progress = hasProgress ? "determinate" : level === "work" ? "indeterminate" : "none";
+    if (hasProgress) {
+      const boundedPercent = Math.max(0, Math.min(100, percent));
+      card.dataset.progressValue = String(boundedPercent);
+      card.style.setProperty("--__xposter-status-progress", `${boundedPercent}%`);
+    } else {
+      delete card.dataset.progressValue;
+      card.style.removeProperty("--__xposter-status-progress");
+    }
+    card.setAttribute("aria-busy", String(level === "work"));
+  }
+
   function showStatus(text, level = "work", timeout = 0) {
     let card = document.getElementById(STATUS_ID);
     if (!card) {
       card = document.createElement("section");
       card.id = STATUS_ID;
+      card.setAttribute("role", "status");
       card.setAttribute("aria-live", "polite");
       card.innerHTML = `
         <div class="__xposter_status_head">
@@ -108,7 +181,10 @@
     }
     const title = card.querySelector("strong");
     const detail = card.querySelector("p");
+    const previousLevel = card.dataset.level;
     card.dataset.level = level;
+    syncStatusTheme(card);
+    updateStatusProgress(card, text, level, previousLevel);
     if (title) title.textContent = statusTitleForLevel(level);
     if (detail) detail.textContent = text;
     document.body.classList.add("__xposter_status_visible");
@@ -123,6 +199,7 @@
   }
 
   function statusTitleForLevel(level) {
+    if (level === "queue") return "Markdown queued";
     if (level === "done") return "Article written";
     if (level === "warn") return "Image note";
     if (level === "error") return "Could not write";
@@ -135,83 +212,124 @@
     style.id = "__xposter_status_style__";
     style.textContent = `
       #${STATUS_ID} {
+        --__xposter-status-paper: #ffffff;
+        --__xposter-status-ink: #0f1419;
+        --__xposter-status-muted: #536471;
+        --__xposter-status-line: #cfd9de;
+        --__xposter-status-signal: #1d9bf0;
+        --__xposter-status-signal-text: #0f6cbf;
+        --__xposter-status-ok: #00ba7c;
+        --__xposter-status-warn: #b15c00;
+        --__xposter-status-danger: #f4212e;
+        --__xposter-status-tone: var(--__xposter-status-signal);
+        --__xposter-status-tone-text: var(--__xposter-status-signal-text);
+        --__xposter-status-progress: 0%;
         position: fixed;
         z-index: 2147483647;
         top: 76px;
         right: 18px;
         width: min(340px, calc(100vw - 36px));
         display: grid;
-        gap: 7px;
-        padding: 13px 14px 12px;
-        border: 1px solid #d8d2c6;
+        gap: 6px;
+        padding: 12px 14px 12px;
+        border: 1px solid var(--__xposter-status-line);
         overflow: hidden;
         isolation: isolate;
-        background:
-          linear-gradient(110deg, transparent 0 22%, rgba(47, 111, 104, 0.12) 42%, transparent 62%),
-          radial-gradient(circle at 18px 18px, rgba(32, 31, 27, 0.08) 1px, transparent 1.5px),
-          #fbfaf7;
-        background-size: 190% 100%, 22px 22px, auto;
-        color: #201f1b;
+        background: var(--__xposter-status-paper);
+        color: var(--__xposter-status-ink);
         font: 13px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
         letter-spacing: 0;
-        box-shadow: 0 18px 46px rgba(32, 31, 27, 0.2);
+        box-shadow: 0 16px 38px rgba(15, 20, 25, 0.10);
         pointer-events: none;
-        animation: __xposter_status_in 220ms cubic-bezier(0.22, 1, 0.36, 1) both, __xposter_status_sweep 3s linear infinite;
+        animation: __xposter_status_in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      #${STATUS_ID}[data-theme="dark"] {
+        --__xposter-status-paper: #121a22;
+        --__xposter-status-ink: #d6dee6;
+        --__xposter-status-muted: #8b99a6;
+        --__xposter-status-line: #33414d;
+        --__xposter-status-signal: #66a9d8;
+        --__xposter-status-signal-text: #9ccbec;
+        --__xposter-status-ok: #6fc8a4;
+        --__xposter-status-warn: #d8b765;
+        --__xposter-status-danger: #ef7d86;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.30);
       }
       #${STATUS_ID}::before {
         content: "";
         position: absolute;
         inset: 0 auto 0 0;
-        width: 4px;
-        background: #2f6f68;
+        z-index: 0;
+        width: var(--__xposter-status-progress);
+        background: color-mix(in oklch, var(--__xposter-status-tone), transparent 91%);
+        box-shadow: inset -1px 0 color-mix(in oklch, var(--__xposter-status-tone), transparent 70%);
+        transition: width 180ms ease-out, background-color 180ms ease-out;
       }
-      #${STATUS_ID}[data-level="warn"]::before { background: #a7552b; }
-      #${STATUS_ID}[data-level="done"]::before { background: #3f6f42; }
-      #${STATUS_ID}[data-level="error"]::before { background: #9d2f2f; }
+      #${STATUS_ID}::after {
+        content: "";
+        position: absolute;
+        inset: auto auto 0 0;
+        z-index: 1;
+        width: var(--__xposter-status-progress);
+        height: 2px;
+        background: var(--__xposter-status-tone);
+        transition: width 180ms ease-out, background-color 180ms ease-out;
+      }
+      #${STATUS_ID}[data-progress="indeterminate"]::before {
+        width: 44%;
+        background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--__xposter-status-tone), transparent 87%), transparent);
+        box-shadow: none;
+        transform: translateX(-110%);
+        animation: __xposter_status_sweep 1.8s linear infinite;
+      }
+      #${STATUS_ID}[data-progress="indeterminate"]::after,
+      #${STATUS_ID}[data-progress="none"]::before,
+      #${STATUS_ID}[data-progress="none"]::after {
+        display: none;
+      }
       #${STATUS_ID}[data-level="warn"] {
-        background-image:
-          linear-gradient(110deg, transparent 0 22%, rgba(167, 85, 43, 0.13) 42%, transparent 62%),
-          radial-gradient(circle at 18px 18px, rgba(32, 31, 27, 0.08) 1px, transparent 1.5px);
+        --__xposter-status-tone: var(--__xposter-status-warn);
+        --__xposter-status-tone-text: var(--__xposter-status-warn);
+        border-color: color-mix(in oklch, var(--__xposter-status-warn), var(--__xposter-status-line) 42%);
+      }
+      #${STATUS_ID}[data-level="queue"] {
+        --__xposter-status-tone: var(--__xposter-status-muted);
+        --__xposter-status-tone-text: var(--__xposter-status-ink);
       }
       #${STATUS_ID}[data-level="done"] {
-        background-image:
-          linear-gradient(110deg, rgba(63, 111, 66, 0.12), transparent 58%),
-          radial-gradient(circle at 18px 18px, rgba(32, 31, 27, 0.08) 1px, transparent 1.5px);
-        animation: __xposter_status_in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        --__xposter-status-tone: var(--__xposter-status-ok);
+        --__xposter-status-tone-text: var(--__xposter-status-ok);
+        border-color: color-mix(in oklch, var(--__xposter-status-ok), var(--__xposter-status-line) 36%);
       }
       #${STATUS_ID}[data-level="error"] {
-        background-image:
-          linear-gradient(110deg, rgba(157, 47, 47, 0.13), transparent 58%),
-          radial-gradient(circle at 18px 18px, rgba(32, 31, 27, 0.08) 1px, transparent 1.5px);
-        animation: __xposter_status_in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        --__xposter-status-tone: var(--__xposter-status-danger);
+        --__xposter-status-tone-text: var(--__xposter-status-danger);
+        border-color: color-mix(in oklch, var(--__xposter-status-danger), var(--__xposter-status-line) 42%);
       }
       #${STATUS_ID} .__xposter_status_head {
         position: relative;
-        z-index: 1;
+        z-index: 2;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
       }
       #${STATUS_ID} .__xposter_status_head span {
-        color: #6b665e;
+        color: var(--__xposter-status-muted);
         font-size: 10px;
         font-weight: 820;
         text-transform: uppercase;
       }
       #${STATUS_ID} .__xposter_status_head strong {
-        color: #2f6f68;
+        color: var(--__xposter-status-tone-text);
         font-size: 12px;
         line-height: 1.2;
       }
-      #${STATUS_ID}[data-level="warn"] .__xposter_status_head strong { color: #a7552b; }
-      #${STATUS_ID}[data-level="done"] .__xposter_status_head strong { color: #3f6f42; }
-      #${STATUS_ID}[data-level="error"] .__xposter_status_head strong { color: #9d2f2f; }
       #${STATUS_ID} p {
         position: relative;
-        z-index: 1;
+        z-index: 2;
         margin: 0;
-        color: #4c4840;
+        color: var(--__xposter-status-muted);
         overflow-wrap: anywhere;
       }
       @keyframes __xposter_status_in {
@@ -219,11 +337,12 @@
         to { opacity: 1; transform: translateY(0); }
       }
       @keyframes __xposter_status_sweep {
-        from { background-position: 160% 0, 0 0, 0 0; }
-        to { background-position: -60% 0, 0 0, 0 0; }
+        from { transform: translateX(-110%); }
+        to { transform: translateX(330%); }
       }
       @media (prefers-reduced-motion: reduce) {
-        #${STATUS_ID} {
+        #${STATUS_ID},
+        #${STATUS_ID}[data-progress="indeterminate"]::before {
           animation: none;
         }
       }
@@ -739,6 +858,87 @@
     return importMarkdown(text, origin);
   }
 
+  function queueItemId(prefix = "queue") {
+    return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function markdownTitleForQueue(markdown, fallback = "Untitled Markdown") {
+    try {
+      const parsed = shared.parseMarkdown(markdown || "");
+      if (parsed?.title) return parsed.title;
+    } catch {}
+    const heading = String(markdown || "").match(/^\s*#\s+(.+)$/m)?.[1]?.trim();
+    return heading || fallback;
+  }
+
+  async function readMarkdownFilesForQueue(files) {
+    const items = [];
+    for (const file of files.filter(isMarkdownFile)) {
+      const markdown = await readMarkdownFile(file);
+      if (!markdown.trim()) continue;
+      items.push({
+        id: queueItemId("queue-drop"),
+        fileName: file.name || "",
+        title: markdownTitleForQueue(markdown, file.name || "Untitled Markdown"),
+        markdown,
+        characters: markdown.length,
+        status: "queued",
+        addedAt: new Date().toISOString(),
+        loadedAt: null,
+        writtenAt: null,
+        source: "x-drop"
+      });
+    }
+    return items;
+  }
+
+  function utf8Size(value) {
+    return new Blob([String(value || "")]).size;
+  }
+
+  function queueItemStorageSize(item) {
+    return utf8Size(JSON.stringify(item || {}));
+  }
+
+  function trimQueueForStorage(items, maxBytes = MAX_SIDEPANEL_QUEUE_STORAGE_BYTES) {
+    const kept = [];
+    let totalBytes = 2;
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index];
+      const itemBytes = queueItemStorageSize(item);
+      if (itemBytes > MAX_SIDEPANEL_QUEUE_ITEM_BYTES) continue;
+      if (totalBytes + itemBytes > maxBytes) continue;
+      kept.unshift(item);
+      totalBytes += itemBytes;
+    }
+    return kept;
+  }
+
+  async function saveMarkdownQueueForSidePanel(items) {
+    if (!items.length || !chrome.storage?.local) return [];
+    const stored = await chrome.storage.local.get(SIDEPANEL_QUEUE_STORAGE_KEY).catch(() => ({}));
+    const existing = Array.isArray(stored[SIDEPANEL_QUEUE_STORAGE_KEY])
+      ? stored[SIDEPANEL_QUEUE_STORAGE_KEY].filter((item) => item?.markdown)
+      : [];
+    const known = new Set(existing.map((item) => `${item.fileName || ""}\n${item.markdown || ""}`));
+    const nextItems = items
+      .filter((item) => queueItemStorageSize(item) <= MAX_SIDEPANEL_QUEUE_ITEM_BYTES)
+      .filter((item) => !known.has(`${item.fileName || ""}\n${item.markdown || ""}`));
+    const nextQueue = trimQueueForStorage([...existing, ...nextItems].slice(-MAX_SIDEPANEL_QUEUE_ITEMS));
+    const queuedIds = new Set(nextQueue.map((item) => item.id));
+    const savedItems = nextItems.filter((item) => queuedIds.has(item.id));
+    if (!savedItems.length) return [];
+    try {
+      await chrome.storage.local.set({ [SIDEPANEL_QUEUE_STORAGE_KEY]: nextQueue });
+      return savedItems;
+    } catch {
+      const fallbackQueue = trimQueueForStorage(savedItems);
+      if (!fallbackQueue.length) return [];
+      await chrome.storage.local.set({ [SIDEPANEL_QUEUE_STORAGE_KEY]: fallbackQueue });
+      return fallbackQueue;
+    }
+  }
+
   function isImageFile(file) {
     return Boolean(file && /^image\//i.test(file.type || ""));
   }
@@ -1114,20 +1314,34 @@
     document.addEventListener("drop", async (event) => {
       if (!isXposterDropCandidate(event.dataTransfer) || !isArticleRoute()) return;
       const files = Array.from(event.dataTransfer.files || []);
-      const markdown = files.find(isMarkdownFile);
-      const imageFiles = markdown ? [] : imageFilesFromTransfer(event.dataTransfer);
-      const markdownText = markdown ? "" : markdownTextFromTransfer(event.dataTransfer);
-      const imageUrl = markdown || imageFiles.length || markdownText ? "" : imageUrlFromTransfer(event.dataTransfer);
-      const directoryItem = markdown || imageFiles.length || imageUrl ? null : findDirectoryTransferItem(event.dataTransfer);
-      if (!markdown && !imageFiles.length && !markdownText && !imageUrl && !directoryItem) {
+      const markdownFiles = files.filter(isMarkdownFile);
+      const imageFiles = markdownFiles.length ? [] : imageFilesFromTransfer(event.dataTransfer);
+      const markdownText = markdownFiles.length ? "" : markdownTextFromTransfer(event.dataTransfer);
+      const imageUrl = markdownFiles.length || imageFiles.length || markdownText ? "" : imageUrlFromTransfer(event.dataTransfer);
+      const directoryItem = markdownFiles.length || imageFiles.length || imageUrl ? null : findDirectoryTransferItem(event.dataTransfer);
+      if (!markdownFiles.length && !imageFiles.length && !markdownText && !imageUrl && !directoryItem) {
         hideDropHint();
         return;
       }
       event.preventDefault();
       event.stopPropagation();
       hideDropHint();
-      if (markdown) {
-        await importFile(markdown, "drop");
+      if (markdownFiles.length > 1) {
+        const added = await saveMarkdownQueueForSidePanel(await readMarkdownFilesForQueue(markdownFiles));
+        try {
+          await chrome.runtime.sendMessage({ type: "xposter:open-side-panel" });
+        } catch {}
+        showStatus(
+          added.length
+            ? `Added ${added.length} Markdown draft${added.length === 1 ? "" : "s"} to xPoster queue. Open the side panel to write them one by one.`
+            : "These Markdown files were already queued or too large to save together. Try loading a large draft by itself.",
+          added.length ? "queue" : "warn",
+          6000
+        );
+        return;
+      }
+      if (markdownFiles[0]) {
+        await importFile(markdownFiles[0], "drop");
         return;
       }
       if (imageFiles.length) {
@@ -1252,6 +1466,8 @@
 
   function dropHintCopy(mode) {
     switch (mode) {
+      case "queue":
+        return { title: "Queue Markdown drafts", detail: "Release to send them to the side panel." };
       case "folder":
         return { title: "Drop image folder", detail: "Release to connect local images." };
       case "image":
@@ -1266,16 +1482,16 @@
   }
 
   function positionDropHint(hint, event) {
-    const width = Math.min(320, Math.max(248, window.innerWidth - 32));
-    const height = 118;
-    const margin = 14;
+    const width = Math.min(246, Math.max(204, window.innerWidth - 32));
+    const height = 76;
+    const margin = 12;
     const minLeft = margin;
     const maxLeft = Math.max(minLeft, window.innerWidth - width - margin);
     const minTop = margin;
     const maxTop = Math.max(minTop, window.innerHeight - height - margin);
     const left = Math.min(maxLeft, Math.max(minLeft, event.clientX - width / 2));
-    const preferredTop = event.clientY + 22;
-    const fallbackTop = event.clientY - height - 22;
+    const preferredTop = event.clientY + 18;
+    const fallbackTop = event.clientY - height - 18;
     const top = preferredTop <= maxTop
       ? Math.max(minTop, preferredTop)
       : Math.min(maxTop, Math.max(minTop, fallbackTop));
@@ -1287,6 +1503,7 @@
     if (!dataTransfer) return "markdown";
     if (hasMarkdownText(dataTransfer)) return "markdown";
     const files = Array.from(dataTransfer.files || []);
+    if (files.filter(isMarkdownFile).length > 1) return "queue";
     if (files.some(isMarkdownFile)) return "markdown";
     if (files.some(isImageFile)) return "image";
     const items = Array.from(dataTransfer.items || []);
@@ -1305,47 +1522,46 @@
         z-index: 2147483646;
         left: var(--xposter-drop-left, 22px);
         top: var(--xposter-drop-top, 96px);
-        width: min(320px, calc(100vw - 32px));
-        min-height: 118px;
+        width: min(246px, calc(100vw - 32px));
+        min-height: 76px;
         transform: translate3d(0, 0, 0);
         display: grid;
         align-content: center;
-        gap: 5px;
-        padding: 18px 20px;
-        border: 2px dashed rgba(15, 20, 25, 0.88);
-        border-radius: 10px;
-        background:
-          radial-gradient(circle at 50% 0%, rgba(15, 20, 25, 0.08), transparent 52%),
-          rgba(255, 255, 255, 0.98);
+        gap: 3px;
+        padding: 12px 14px;
+        border: 1px solid rgba(15, 20, 25, 0.14);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.96);
         color: #0f1419;
-        box-shadow: 0 22px 58px rgba(15, 20, 25, 0.22);
+        box-shadow: 0 10px 30px rgba(15, 20, 25, 0.13);
         font: 14px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
         letter-spacing: 0;
         pointer-events: none;
         animation:
           __xposter_drop_in 220ms cubic-bezier(0.22, 1, 0.36, 1) both,
-          __xposter_drop_breathe 1.45s ease-in-out infinite;
+          __xposter_drop_breathe 1.8s ease-in-out infinite;
       }
       #${DROP_HINT_ID}::before {
         content: "";
         position: absolute;
-        inset: 8px;
-        border: 1px solid rgba(15, 20, 25, 0.12);
+        inset: 6px;
+        border: 1px dashed rgba(15, 20, 25, 0.16);
         border-radius: 6px;
       }
       #${DROP_HINT_ID} strong {
         position: relative;
-        max-width: 15rem;
-        font-size: 22px;
-        font-weight: 850;
-        line-height: 1.12;
+        max-width: 13rem;
+        font-size: 14px;
+        font-weight: 720;
+        line-height: 1.2;
       }
       #${DROP_HINT_ID} p {
         position: relative;
-        max-width: 16rem;
+        max-width: 13rem;
         margin: 0;
         color: #536471;
-        font-size: 13px;
+        font-size: 12px;
+        line-height: 1.28;
       }
       #${DROP_HINT_ID} .__xposter_drop_mode {
         position: absolute;
@@ -1356,6 +1572,9 @@
         clip-path: inset(50%);
         white-space: nowrap;
       }
+      #${DROP_HINT_ID}[data-mode="queue"] {
+        border-color: rgba(15, 20, 25, 0.18);
+      }
       @keyframes __xposter_drop_in {
         from { opacity: 0; transform: translate3d(0, -6px, 0) scale(0.985); }
         to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
@@ -1363,20 +1582,61 @@
       @keyframes __xposter_drop_breathe {
         0%, 100% {
           box-shadow:
-            0 22px 58px rgba(15, 20, 25, 0.22),
+            0 10px 30px rgba(15, 20, 25, 0.13),
             0 0 0 0 rgba(15, 20, 25, 0);
           transform: scale(1);
         }
         50% {
           box-shadow:
-            0 22px 58px rgba(15, 20, 25, 0.22),
-            0 0 0 7px rgba(15, 20, 25, 0.06);
-          transform: scale(0.996);
+            0 10px 30px rgba(15, 20, 25, 0.13),
+            0 0 0 4px rgba(15, 20, 25, 0.035);
+          transform: scale(0.998);
         }
       }
       @media (prefers-reduced-motion: reduce) {
         #${DROP_HINT_ID} {
           animation: none;
+        }
+      }
+      @media (prefers-color-scheme: dark) {
+        #${DROP_HINT_ID} {
+          border-color: rgba(231, 233, 234, 0.18);
+          background: rgba(22, 24, 28, 0.96);
+          color: #e7e9ea;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.30);
+        }
+        #${DROP_HINT_ID}::before {
+          border-color: rgba(231, 233, 234, 0.18);
+        }
+        #${DROP_HINT_ID} p {
+          color: #aeb4b9;
+        }
+        @keyframes __xposter_drop_breathe {
+          0%, 100% {
+            box-shadow:
+              0 10px 30px rgba(0, 0, 0, 0.30),
+              0 0 0 0 rgba(231, 233, 234, 0);
+            transform: scale(1);
+          }
+          50% {
+            box-shadow:
+              0 10px 30px rgba(0, 0, 0, 0.30),
+              0 0 0 4px rgba(231, 233, 234, 0.05);
+            transform: scale(0.998);
+          }
+        }
+      }
+      @media (max-width: 360px) {
+        #${DROP_HINT_ID} {
+          width: min(220px, calc(100vw - 24px));
+          min-height: 68px;
+          padding: 10px 12px;
+        }
+        #${DROP_HINT_ID} strong {
+          font-size: 13px;
+        }
+        #${DROP_HINT_ID} p {
+          font-size: 11.5px;
         }
       }
     `;

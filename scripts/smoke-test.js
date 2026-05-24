@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const readJson = (relativePath) =>
@@ -96,6 +97,20 @@ const coverOnlyPlan = shared.buildPastePlan(
     }
   }
 );
+const contentScriptText = fs.readFileSync(path.join(root, "src/content.js"), "utf8");
+const statusHelperStart = contentScriptText.indexOf("  function normalizeText");
+const statusHelperEnd = contentScriptText.indexOf("  function showStatus");
+const statusSandbox = {
+  document: { body: {}, documentElement: {} },
+  getComputedStyle: () => ({ backgroundColor: "rgb(18, 26, 34)" }),
+  window: { matchMedia: () => ({ matches: false }) }
+};
+
+assert.ok(statusHelperStart >= 0 && statusHelperEnd > statusHelperStart, "status helper functions should be present");
+vm.runInNewContext(
+  `${contentScriptText.slice(statusHelperStart, statusHelperEnd)}; this.statusHelpers = { statusThemeFromPage, statusProgressForText };`,
+  statusSandbox
+);
 
 assert.equal(parsed.title, "xPoster live smoke test", "frontmatter title should parse");
 assert.ok(parsed.cover, "cover should parse");
@@ -114,16 +129,37 @@ assert.ok(
   "failed remote image fallback should not write internal permission errors into the article"
 );
 assert.ok(
-  fs.readFileSync(path.join(root, "src/content.js"), "utf8").includes('showStatus(formatCompletionMessage(summary), "done", 7000)'),
+  contentScriptText.includes('showStatus(formatCompletionMessage(summary), "done", 7000)'),
   "successful Markdown writes should finish with a done status even when images stay as links"
 );
 assert.ok(
-  fs.readFileSync(path.join(root, "src/content.js"), "utf8").includes("uploadDroppedImageUrl"),
+  contentScriptText.includes("uploadDroppedImageUrl"),
   "content script should upload dropped web image URLs instead of only showing a drop hint"
 );
 assert.ok(
-  fs.readFileSync(path.join(root, "src/content.js"), "utf8").includes('data-slot="image"'),
+  contentScriptText.includes('data-slot="image"'),
   "drop hint should expose an image drop mode"
+);
+assert.equal(statusSandbox.statusHelpers.statusThemeFromPage(), "dark", "status overlay should detect a dark host surface");
+assert.equal(
+  statusSandbox.statusHelpers.statusProgressForText("Preparing Markdown...", "work"),
+  6,
+  "status background progress should begin during preparation"
+);
+assert.equal(
+  statusSandbox.statusHelpers.statusProgressForText("Uploading image 1/1...", "work"),
+  80,
+  "the final image upload should leave room for final writing steps"
+);
+assert.equal(
+  statusSandbox.statusHelpers.statusProgressForText("Cleaning up import markers...", "work"),
+  96,
+  "cleanup should display near-complete progress"
+);
+assert.equal(
+  statusSandbox.statusHelpers.statusProgressForText("Article written.", "done"),
+  100,
+  "completed status should fill the status background"
 );
 assert.ok(
   fs.readFileSync(path.join(root, "src/main-world.js"), "utf8").includes("uploadFilesToEditor"),

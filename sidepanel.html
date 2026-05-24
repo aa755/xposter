@@ -142,6 +142,15 @@
           <strong data-i18n="Paste or drop Markdown">Paste or drop Markdown</strong>
           <span data-i18n="MacDown, Obsidian, Typora, or any .md file.">MacDown, Obsidian, Typora, or any .md file.</span>
         </div>
+        <section class="draft-queue" id="draftQueue" aria-label="Pending Markdown queue" data-i18n-aria-label="Pending Markdown queue" hidden>
+          <div class="draft-queue-head">
+            <div>
+              <strong data-i18n="Pending queue">Pending queue</strong>
+              <span id="draftQueueMeta" data-i18n="Drop multiple Markdown files to queue them here.">Drop multiple Markdown files to queue them here.</span>
+            </div>
+          </div>
+          <ol class="draft-queue-list" id="draftQueueList"></ol>
+        </section>
         <textarea id="markdown" spellcheck="false" placeholder="# Article title&#10;&#10;Paste your Markdown here. xPoster will preview text and images, then show the next step." data-i18n-placeholder="# Article title&#10;&#10;Paste your Markdown here. xPoster will preview text and images, then show the next step."></textarea>
 
         <section class="actions publish-dock" aria-label="Write article" data-empty="true">
