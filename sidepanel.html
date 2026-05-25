@@ -151,7 +151,6 @@
         </div>
         <div class="draft-brief" id="draftBrief" data-tone="idle" aria-live="polite">
           <span id="draftRecognized" data-i18n="Step 1: paste Markdown, or choose a .md file.">Step 1: paste Markdown, or choose a .md file.</span>
-          <span id="draftTargetState" hidden></span>
         </div>
         <textarea id="markdown" spellcheck="false" placeholder="Paste Markdown here, choose a file, or drop .md files." data-i18n-placeholder="Paste Markdown here, choose a file, or drop .md files."></textarea>
         <section class="draft-queue" id="draftQueue" aria-label="Pending Markdown queue" data-i18n-aria-label="Pending Markdown queue" hidden>
@@ -208,8 +207,17 @@
           <div class="record-search">
             <label class="visually-hidden" for="recordSearchInput" data-i18n="Find previous text">Find previous text</label>
             <input id="recordSearchInput" type="search" autocomplete="off" placeholder="Search Markdown text, title, file, or URL" data-i18n-placeholder="Search Markdown text, title, file, or URL" />
-            <button class="secondary compact danger record-clear-button" id="clearRecordHistory" type="button" disabled data-i18n="Clear all">Clear all</button>
-            <span id="recordHistoryMeta">No records yet.</span>
+            <div class="record-search-meta">
+              <span id="recordHistoryMeta">No records yet.</span>
+              <span class="record-clear-wrap">
+                <button class="record-clear-button" id="clearRecordHistory" type="button" disabled data-i18n="Clear all" aria-expanded="false">Clear all</button>
+                <span class="record-clear-confirm" id="recordClearConfirm" hidden>
+                  <span data-i18n="Clear all saved draft records?">Clear all saved draft records?</span>
+                  <button type="button" id="cancelRecordClear" data-i18n="Cancel">Cancel</button>
+                  <button type="button" id="confirmRecordClear" data-i18n="Clear">Clear</button>
+                </span>
+              </span>
+            </div>
             <span class="visually-hidden" id="recordSearchSummary">Find the Markdown you used before, copy it, or edit it before writing.</span>
           </div>
           <ol class="record-history-list" id="recordHistoryList">
@@ -334,51 +342,39 @@
           </summary>
           <div class="diagnostics-body">
 
-        <section class="proof-deck" aria-label="Saved result checklist">
+        <section class="proof-deck" aria-label="Recent publish record">
           <div class="section-head">
             <div>
-              <h2>Saved result checklist</h2>
-              <p id="proofDeckMeta">This import is complete only after you review the X Article.</p>
+              <h2>Recent publish record</h2>
+              <p id="proofDeckMeta">Load Markdown, check X, or write an article to create a record.</p>
             </div>
             <div class="button-cluster">
-              <button class="secondary compact" id="copyExtensionPath">Copy path</button>
-              <button class="secondary compact" id="copyProofDeck">Copy</button>
+              <button class="secondary compact" id="copyExtensionPath" hidden>Copy path</button>
+              <button class="secondary compact" id="copyProofDeck">Copy summary</button>
             </div>
           </div>
-          <div class="proof-path" id="extensionPath">the folder you cloned or downloaded</div>
+          <div class="proof-path" id="extensionPath" hidden>the folder you cloned or downloaded</div>
           <ol class="proof-list" id="proofDeckList">
-            <li data-proof="loaded" data-tone="warn">
-              <strong>xPoster loaded</strong>
-              <span>Confirm this xPoster copy is loaded in the signed-in Chrome profile.</span>
+            <li data-proof="draft" data-tone="idle">
+              <strong>Draft saved</strong>
+              <span>No Markdown record saved yet.</span>
             </li>
-            <li data-proof="target" data-tone="warn">
+            <li data-proof="article" data-tone="idle">
               <strong>X Article</strong>
-              <span>Open X Articles in the active tab.</span>
-            </li>
-            <li data-proof="bridge" data-tone="warn">
-              <strong>Can write to X</strong>
-                <span>Click Check article after an article editor opens.</span>
-            </li>
-            <li data-proof="remote-images" data-tone="idle">
-              <strong>Web images</strong>
-              <span>No web image links in this draft.</span>
-            </li>
-            <li data-proof="import" data-tone="idle">
-              <strong>Import completed</strong>
-              <span>No import record saved yet.</span>
+              <span>No linked article yet.</span>
             </li>
             <li data-proof="result" data-tone="idle">
-              <strong>Article reviewed</strong>
-              <span>0/9 final result checks recorded.</span>
+              <strong>Write result</strong>
+              <span>No write result saved yet.</span>
             </li>
-            <li data-proof="package" data-tone="idle">
-              <strong>Saved records</strong>
-              <span>Copy or save after the final result is complete.</span>
+            <li data-proof="next" data-tone="idle">
+              <strong>Next step</strong>
+              <span>Load a draft or run Check article.</span>
             </li>
           </ol>
         </section>
 
-        <section class="completion-audit" aria-label="Before you finish">
+        <section class="completion-audit" aria-label="Before you finish" hidden>
           <div class="section-head">
             <div>
               <h2>Before you finish</h2>
@@ -425,20 +421,28 @@
           </ol>
         </section>
 
-        <section class="evidence" id="evidencePanel">
-          <div class="section-head">
-            <div>
-              <h2>Saved records</h2>
-              <p id="evidenceMeta">No local record saved yet.</p>
+        <details class="evidence-raw">
+          <summary>
+            <span>
+              <strong>Technical details</strong>
+              <em>Only needed for troubleshooting or support.</em>
+            </span>
+          </summary>
+          <section class="evidence" id="evidencePanel">
+            <div class="section-head">
+              <div>
+                <h2>Technical record</h2>
+                <p id="evidenceMeta">No technical record saved yet.</p>
+              </div>
+              <div class="button-cluster">
+                <button class="secondary compact" id="copyEvidence" disabled>Copy details</button>
+                <button class="secondary compact" id="copyEvidencePackage">Copy full record</button>
+                <button class="secondary compact" id="downloadEvidencePackage">Save file</button>
+              </div>
             </div>
-            <div class="button-cluster">
-              <button class="secondary compact" id="copyEvidence" disabled>Copy</button>
-              <button class="secondary compact" id="copyEvidencePackage">Copy all</button>
-              <button class="secondary compact" id="downloadEvidencePackage">Save</button>
-            </div>
-          </div>
-          <pre id="evidenceText">Run Check or Write article to save a detailed record.</pre>
-        </section>
+            <pre id="evidenceText">Run Check or Write article to save a technical record.</pre>
+          </section>
+        </details>
           </div>
         </details>
 
@@ -913,6 +917,22 @@
         </div>
         <div class="setting-row setting-row-stack">
           <div>
+            <strong data-i18n="Article export">Article export</strong>
+            <span data-i18n="Show a quiet Markdown copy/download button on readable X Articles.">Show a quiet Markdown copy/download button on readable X Articles.</span>
+          </div>
+          <fieldset class="setting-checks" id="articleExportOptions" aria-label="Article export" data-i18n-aria-label="Article export">
+            <legend class="visually-hidden" data-i18n="Article export">Article export</legend>
+            <label>
+              <input type="checkbox" id="articleExportOption" checked />
+              <span>
+                <strong data-i18n="Show Markdown export button">Show Markdown export button</strong>
+                <em data-i18n="Copy or download article pages as standard Markdown.">Copy or download article pages as standard Markdown.</em>
+              </span>
+            </label>
+          </fieldset>
+        </div>
+        <div class="setting-row setting-row-stack">
+          <div>
             <strong data-i18n="Success feedback">Success feedback</strong>
             <span data-i18n="Choose the small celebration shown after a successful write.">Choose the small celebration shown after a successful write.</span>
           </div>
@@ -944,7 +964,7 @@
             </label>
             <label>
               <span data-i18n="Volume">Volume</span>
-              <input id="successSoundVolume" type="range" min="20" max="100" step="5" value="55" aria-label="Volume" data-i18n-aria-label="Volume" />
+              <input id="successSoundVolume" type="range" min="20" max="100" step="5" value="75" aria-label="Volume" data-i18n-aria-label="Volume" />
             </label>
             <button class="secondary compact" id="testSuccessFeedback" type="button" data-i18n="Test feedback">Test feedback</button>
           </div>

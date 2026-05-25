@@ -66,13 +66,15 @@
     draftQueueList: document.getElementById("draftQueueList"),
     addDraft: document.getElementById("addDraft"),
     clearRecordHistory: document.getElementById("clearRecordHistory"),
+    recordClearConfirm: document.getElementById("recordClearConfirm"),
+    cancelRecordClear: document.getElementById("cancelRecordClear"),
+    confirmRecordClear: document.getElementById("confirmRecordClear"),
     reviewMeta: document.getElementById("reviewMeta"),
     reviewList: document.getElementById("reviewList"),
     importDraft: document.getElementById("importDraft"),
     importHint: document.getElementById("importHint"),
     draftBrief: document.getElementById("draftBrief"),
     draftRecognized: document.getElementById("draftRecognized"),
-    draftTargetState: document.getElementById("draftTargetState"),
     openArticles: document.getElementById("openArticles"),
     loadFile: document.getElementById("loadFile"),
     loadSmoke: document.getElementById("loadSmoke"),
@@ -144,6 +146,8 @@
     metadataOptions: document.getElementById("metadataOptions"),
     importTitleOption: document.getElementById("importTitleOption"),
     importCoverOption: document.getElementById("importCoverOption"),
+    articleExportOptions: document.getElementById("articleExportOptions"),
+    articleExportOption: document.getElementById("articleExportOption"),
     successFeedbackOptions: document.getElementById("successFeedbackOptions"),
     confettiOption: document.getElementById("confettiOption"),
     successSoundOption: document.getElementById("successSoundOption"),
@@ -159,6 +163,7 @@
   const STORAGE_LANGUAGE = "xposter_language";
   const STORAGE_THEME = "xposter_theme";
   const STORAGE_IMPORT_OPTIONS = "xposter_import_options";
+  const STORAGE_ARTICLE_EXPORT_SETTINGS = "xposter_article_export_settings";
   const STORAGE_SUCCESS_FEEDBACK = "xposter_success_feedback";
   const STORAGE_RECORD_HISTORY = "xposter_publish_record_history";
   const STORAGE_DRAFT_QUEUE = "xposter_publish_queue";
@@ -167,8 +172,42 @@
   const MAX_DRAFT_QUEUE_STORAGE_BYTES = 4 * 1024 * 1024;
   const MAX_DRAFT_QUEUE_ITEM_BYTES = 512 * 1024;
   const MAX_RECORD_MARKDOWN_CHARS = 120000;
+  const MARKDOWN_FILE_RE = /\.(md|markdown|mdown|mkd|txt)$/i;
+  const MARKDOWN_FILE_ACCEPT = ".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain";
+  const MARKDOWN_TRANSFER_MIME_RE = /^(text\/markdown|text\/plain|application\/octet-stream)$/i;
+  const MARKDOWN_LOAD_ERROR_TITLE = "Could not load Markdown";
+  const MARKDOWN_LOAD_ERROR_DETAIL = "Try a .md, .markdown, .txt file, or plain Markdown text.";
+  const NO_NEW_DRAFTS_DETAIL = "No new Markdown drafts were added.";
+  const DRAFT_SAVE_DELAY_MS = 220;
+  const DRAFT_ANALYZE_DELAY_MS = 140;
+  const RECORD_SEARCH_DELAY_MS = 120;
   const THEME_MODES = new Set(["system", "light", "dark"]);
-  const SUCCESS_SOUND_STYLES = new Set(["soft", "bell", "pop"]);
+  const SUCCESS_SOUND_DEFAULT_VOLUME = 0.75;
+  const SUCCESS_SOUND_PRESETS = {
+    soft: {
+      master: 0.18,
+      notes: [
+        { frequency: 523.25, start: 0, duration: 0.18, type: "sine", gain: 0.48 },
+        { frequency: 659.25, start: 0.09, duration: 0.22, type: "sine", gain: 0.46 },
+        { frequency: 783.99, start: 0.18, duration: 0.26, type: "sine", gain: 0.4 }
+      ]
+    },
+    bell: {
+      master: 0.17,
+      notes: [
+        { frequency: 587.33, start: 0, duration: 0.34, type: "sine", gain: 0.42 },
+        { frequency: 880, start: 0.055, duration: 0.46, type: "triangle", gain: 0.3 }
+      ]
+    },
+    pop: {
+      master: 0.16,
+      notes: [
+        { frequency: 698.46, start: 0, duration: 0.1, type: "triangle", gain: 0.5 },
+        { frequency: 1046.5, start: 0.08, duration: 0.14, type: "sine", gain: 0.38 }
+      ]
+    }
+  };
+  const SUCCESS_SOUND_STYLES = new Set(Object.keys(SUCCESS_SOUND_PRESETS));
   const SUCCESS_CONFETTI_COLORS = ["#0f1419", "#536471", "#1d9bf0", "#00ba7c", "#cfd9de"];
   const EXTENSION_VERSION =
     typeof chrome !== "undefined" && chrome.runtime?.getManifest
@@ -283,14 +322,21 @@ console.log("示例代码块");
   let activeDraftFingerprint = null;
   let activeDraftFinalized = false;
   let draftInputHistoryTimer = null;
+  let draftSaveTimer = null;
+  let draftAnalyzeTimer = null;
+  let recordSearchTimer = null;
   let suppressNextTypedHistory = false;
   let activeWriteQueueItemId = null;
+  let queueMotionTimer = null;
+  let animatedQueueItemIds = new Set();
   let batchWriting = false;
   let importOptions = { setTitle: true, setCover: true };
-  let successFeedbackOptions = { confetti: true, sound: true, soundStyle: "soft", volume: 0.55 };
+  let successFeedbackOptions = { confetti: true, sound: true, soundStyle: "soft", volume: SUCCESS_SOUND_DEFAULT_VOLUME };
+  let articleExportOptions = { enabled: true, mode: "copy" };
   let successAudioContext = null;
   let successConfetti = null;
   let lastSuccessFeedbackKey = "";
+  let runSummaryCollapseTimer = null;
   let remoteImageAccessStatus = { origins: [], available: [], missing: [], checkedAt: null };
   let remoteImageProbeStatus = { state: "idle", total: 0, ok: 0, fail: 0, results: [], checkedAt: null };
 
@@ -496,6 +542,24 @@ console.log("示例代码块");
       "Markdown loaded": "草稿就绪",
       "Could not load Markdown": "无法载入 Markdown",
       "Ready for Markdown": "等待 Markdown",
+      "Draft added": "草稿已添加",
+      "No new Markdown drafts were added.": "没有新增 Markdown 草稿。",
+      "No Markdown content": "没有 Markdown 内容",
+      "Unknown": "未知",
+      "Optional": "可选",
+      "Can create": "可新建",
+      "Not ready": "未就绪",
+      "Markdown parsed": "Markdown 已解析",
+      "Status update": "状态更新",
+      "Live progress reset.": "实时进度已重置。",
+      "Received an import progress update from the active X tab.": "已收到当前 X 标签页的导入进度更新。",
+      "Preparing Markdown, images, and the X editor.": "正在准备 Markdown、图片和 X 编辑器。",
+      "Writing the article body into X.": "正在把文章正文写入 X。",
+      "Placing images, tweets, code, and dividers into the article.": "正在放置图片、推文、代码和分隔线。",
+      "Setting the title and cover after the body import.": "正文导入后正在设置标题和封面。",
+      "Live status received from the active X tab.": "已收到当前 X 标签页的实时状态。",
+      "Writing finished.": "写入完成。",
+      "Writing failed": "写入失败",
       "Paste or drop Markdown": "添加或拖入 Markdown",
       "MacDown, Obsidian, Typora, or any .md file.": "支持 MacDown、Obsidian、Typora 或 .md 文件。",
       "Drop a .md file or paste text into the editor below.": "拖入 .md 文件，或把文本粘贴到下面的编辑框。",
@@ -605,6 +669,9 @@ console.log("示例代码块");
       Settings: "设置",
       "Search records": "搜索记录",
       "Clear all": "全部清空",
+      "Clear": "清空",
+      "Clear all saved draft records?": "清空所有草稿记录？",
+      Cancel: "取消",
       "Draft recovery": "找回草稿",
       "Find previous text": "找回上次输入",
       "Find the Markdown you used before, copy it, or edit it before writing.": "找回之前输入的 Markdown，复制或编辑后再写入。",
@@ -660,6 +727,8 @@ console.log("示例代码块");
       "Test feedback": "测试反馈",
       "Feedback test": "反馈测试",
       "Use this to confirm animation and sound work in this Chrome profile.": "用它确认当前 Chrome 配置里的动画和音效是否可用。",
+      "Sound blocked": "音效被拦截",
+      "Chrome did not unlock audio for this panel. Click Test feedback again after interacting with the panel.": "Chrome 还没有允许这个面板播放音效。和面板交互后，再点一次测试反馈。",
       "Project and author": "项目与作者",
       "Open the project page or follow updates from the author.": "打开项目页面，或关注作者更新。",
       "Open GitHub project": "打开 GitHub 项目",
@@ -679,7 +748,21 @@ console.log("示例代码块");
       "Current editor text": "当前编辑器文本",
       "Article review checklist": "文章检查清单",
       "Article check": "文章检查",
-      "Saved result checklist": "保存的结果清单",
+      "Saved result checklist": "最近发布记录",
+      "Recent publish record": "最近发布记录",
+      "Load Markdown, check X, or write an article to create a record.": "载入 Markdown、检查 X 或写入文章后，这里会生成记录。",
+      "Copy summary": "复制摘要",
+      "Draft saved": "草稿已保存",
+      "No Markdown record saved yet.": "还没有保存 Markdown 记录。",
+      "No linked article yet.": "还没有关联文章。",
+      "Write result": "写入结果",
+      "No write result saved yet.": "还没有写入结果。",
+      "Technical details": "技术详情",
+      "Only needed for troubleshooting or support.": "仅在排查问题或需要支持时查看。",
+      "Technical record": "技术记录",
+      "Copy details": "复制详情",
+      "Copy full record": "复制完整记录",
+      "Save file": "保存文件",
       "Before you finish": "完成前",
       "Draft preview": "草稿预览",
       "Draft editor note": "草稿编辑器说明",
@@ -1278,6 +1361,7 @@ console.log("示例代码块");
       "Writing": "正在写入",
       "Article is written.": "文章已写入。",
       "Written. Review and publish in X.": "已写入。请在 X 中检查并发布。",
+      "Written. Review in X.": "已写入，请在 X 中检查。",
       "Markdown ready.": "Markdown 已准备好。",
       "Ready. xPoster will fill the open X Article, then you review it before publishing.": "准备好了。xPoster 会填入打开的 X 文章草稿，然后由你检查并发布。",
       "Local images": "本地图片",
@@ -1740,6 +1824,10 @@ console.log("示例代码块");
       "Relative local images can resolve through the selected folder.": "相对路径本地图片可通过所选文件夹读取。",
       "Choose a readable folder from the active X page.": "请从当前 X 页面选择一个可读取文件夹。",
       "No local image paths require folder access.": "没有本地图片路径需要文件夹权限。",
+      "Article export": "文章导出",
+      "Show a quiet Markdown copy/download button on readable X Articles.": "在可读取的 X 文章页显示低调的 Markdown 复制/下载按钮。",
+      "Show Markdown export button": "显示 Markdown 导出按钮",
+      "Copy or download article pages as standard Markdown.": "将文章页面复制或下载为标准 Markdown。",
       Done: "完成",
       Blocked: "阻塞",
       Running: "运行中",
@@ -1833,13 +1921,45 @@ console.log("示例代码块");
     applyImportOptions(importOptions);
   }
 
+  function normalizeArticleExportOptions(options = {}) {
+    return {
+      enabled: options.enabled !== false,
+      mode: options.mode === "download" ? "download" : "copy"
+    };
+  }
+
+  function syncArticleExportControls() {
+    if (els.articleExportOption) els.articleExportOption.checked = articleExportOptions.enabled !== false;
+  }
+
+  function applyArticleExportOptions(options = articleExportOptions) {
+    articleExportOptions = normalizeArticleExportOptions(options);
+    syncArticleExportControls();
+  }
+
+  async function setArticleExportOptions(nextOptions, { persist = true } = {}) {
+    applyArticleExportOptions(nextOptions);
+    if (persist && hasChromeApi()) {
+      await chrome.storage.local.set({ [STORAGE_ARTICLE_EXPORT_SETTINGS]: normalizeArticleExportOptions(articleExportOptions) });
+    }
+  }
+
+  async function restoreArticleExportOptions() {
+    if (hasChromeApi()) {
+      const stored = await chrome.storage.local.get(STORAGE_ARTICLE_EXPORT_SETTINGS).catch(() => ({}));
+      applyArticleExportOptions(stored[STORAGE_ARTICLE_EXPORT_SETTINGS] || articleExportOptions);
+      return;
+    }
+    applyArticleExportOptions(articleExportOptions);
+  }
+
   function normalizeSuccessFeedbackOptions(options = {}) {
     const volume = Number(options.volume);
     return {
       confetti: options.confetti !== false,
       sound: options.sound !== false,
       soundStyle: SUCCESS_SOUND_STYLES.has(options.soundStyle) ? options.soundStyle : "soft",
-      volume: Number.isFinite(volume) ? Math.min(1, Math.max(0.2, volume)) : 0.55
+      volume: Number.isFinite(volume) ? Math.min(1, Math.max(0.2, volume)) : SUCCESS_SOUND_DEFAULT_VOLUME
     };
   }
 
@@ -1851,7 +1971,7 @@ console.log("示例代码块");
     if (els.confettiOption) els.confettiOption.checked = successFeedbackOptions.confetti !== false;
     if (els.successSoundOption) els.successSoundOption.checked = successFeedbackOptions.sound !== false;
     if (els.successSoundStyle) els.successSoundStyle.value = successFeedbackOptions.soundStyle || "soft";
-    if (els.successSoundVolume) els.successSoundVolume.value = String(Math.round((successFeedbackOptions.volume || 0.55) * 100));
+    if (els.successSoundVolume) els.successSoundVolume.value = String(Math.round((successFeedbackOptions.volume || SUCCESS_SOUND_DEFAULT_VOLUME) * 100));
   }
 
   function applySuccessFeedbackOptions(options = successFeedbackOptions) {
@@ -1883,41 +2003,21 @@ console.log("示例代码块");
     return successAudioContext;
   }
 
-  function primeSuccessAudio() {
+  async function primeSuccessAudio() {
     const context = ensureSuccessAudioContext();
-    if (!context) return;
+    if (!context) return false;
     if (context.state === "suspended") {
-      context.resume().catch(() => {});
+      try {
+        await context.resume();
+      } catch {
+        return false;
+      }
     }
+    return context.state === "running";
   }
 
   function successSoundNotes(style = successFeedbackOptions.soundStyle) {
-    if (style === "bell") {
-      return {
-        master: 0.06,
-        notes: [
-          { frequency: 587.33, start: 0, duration: 0.34, type: "sine", gain: 0.28 },
-          { frequency: 880, start: 0.055, duration: 0.42, type: "triangle", gain: 0.18 }
-        ]
-      };
-    }
-    if (style === "pop") {
-      return {
-        master: 0.055,
-        notes: [
-          { frequency: 698.46, start: 0, duration: 0.08, type: "triangle", gain: 0.34 },
-          { frequency: 1046.5, start: 0.08, duration: 0.11, type: "sine", gain: 0.25 }
-        ]
-      };
-    }
-    return {
-      master: 0.045,
-      notes: [
-        { frequency: 523.25, start: 0, duration: 0.18, type: "sine", gain: 0.36 },
-        { frequency: 659.25, start: 0.09, duration: 0.22, type: "sine", gain: 0.34 },
-        { frequency: 783.99, start: 0.18, duration: 0.24, type: "sine", gain: 0.3 }
-      ]
-    };
+    return SUCCESS_SOUND_PRESETS[style] || SUCCESS_SOUND_PRESETS.soft;
   }
 
   async function playSuccessSound({ force = false } = {}) {
@@ -1933,11 +2033,12 @@ console.log("示例代码块");
     if (context.state === "closed" || context.state === "suspended") return;
     const now = context.currentTime + 0.01;
     const sound = successSoundNotes();
-    const volume = Math.min(1, Math.max(0.2, Number(successFeedbackOptions.volume) || 0.55));
+    const volume = Math.min(1, Math.max(0.2, Number(successFeedbackOptions.volume) || SUCCESS_SOUND_DEFAULT_VOLUME));
     const master = context.createGain();
     master.gain.setValueAtTime(0.0001, now);
     master.gain.exponentialRampToValueAtTime(sound.master * volume, now + 0.018);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+    const releaseAt = now + Math.max(0.48, ...sound.notes.map((note) => note.start + note.duration + 0.06));
+    master.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
     master.connect(context.destination);
 
     sound.notes.forEach((note) => {
@@ -1995,7 +2096,15 @@ console.log("示例代码块");
     const key = `test-${Date.now()}`;
     lastSuccessFeedbackKey = key;
     if (successFeedbackOptions.confetti) fireSuccessConfetti();
-    if (successFeedbackOptions.sound) void playSuccessSound({ force: true });
+    if (successFeedbackOptions.sound) {
+      void primeSuccessAudio().then((ready) => {
+        if (ready) {
+          void playSuccessSound({ force: true });
+        } else {
+          setDraftDropStatus("Sound blocked", "Chrome did not unlock audio for this panel. Click Test feedback again after interacting with the panel.", "error");
+        }
+      });
+    }
     setDraftDropStatus("Feedback test", "Use this to confirm animation and sound work in this Chrome profile.", "done");
   }
 
@@ -2132,8 +2241,11 @@ console.log("示例代码块");
       [/^(\d+) blocks loaded; title detected\.$/, "已加载 $1 个块；已检测标题。"],
       [/^(\d+) blocks loaded; title missing\.$/, "已加载 $1 个块；未检测标题。"],
       [/^(\d+) block\(s\), (\d+) character\(s\), ready to write\.$/, "$1 个块，$2 个字符，可以写入。"],
+      [/^Title found · (\d+) images? · (\d+) code blocks?$/, "标题已检测 · $1 张图片 · $2 个代码块"],
+      [/^No title · (\d+) images? · (\d+) code blocks?$/, "未检测标题 · $1 张图片 · $2 个代码块"],
       [/^Loaded (\d+) characters\. Review it, then click Write to X draft\.$/, "已载入 $1 个字符。检查后点击写入到 X 草稿。"],
       [/^(\d+) characters\. Review it, then click Write to X draft\.$/, "$1 个字符。检查后点击写入到 X 草稿。"],
+      [/^(\d+(?:,\d+)*) chars · (\d+) images? · (\d+) code blocks?$/, "$1 字 · 图片 $2 · 代码块 $3"],
       [/^(\d+) characters, ready to write\.$/, "$1 字符，可以写入。"],
       [/^(\d+(?:,\d+)*) chars$/, "$1 字"],
       [/^Queued (\d+) Markdown draft(?:s)?\.$/, "已加入 $1 篇 Markdown 草稿。"],
@@ -2156,6 +2268,10 @@ console.log("示例代码块");
       [/^(\d+) web image\(s\) may stay as links unless the URLs are replaced\.$/, "$1 张网页图片可能保留为链接，除非替换为可访问 URL。"],
       [/^(\d+) web image\(s\) will upload through X when reachable\.$/, "$1 张网页图片可访问时会通过 X 上传。"],
       [/^(\d+) web image\(s\) will upload through X when reachable while writing to X draft\.$/, "$1 张网页图片可访问时会通过 X 上传。"],
+      [/^Images: (\d+)$/, "图片：$1"],
+      [/^Web images: (\d+)$/, "网页图片：$1"],
+      [/^Web images: (\d+) ready$/, "网页图片：$1 已就绪"],
+      [/^Web images: (\d+) may stay as links$/, "网页图片：$1 张可能保留为链接"],
       [/^(\d+) web image\(s\) will be handled during Write\. Unreachable images stay as links\.$/, "$1 张网页图片会在写入时尝试上传；无法访问时会保留为链接。"],
       [/^(\d+) web image\(s\) will be tried while writing to X draft\. Unreachable images stay as links\.$/, "$1 张网页图片会在写入时尝试上传；无法访问时会保留为链接。"],
       [/^(\d+) image\(s\) will upload through X when possible\.$/, "$1 张图片会尽量通过 X 上传。"],
@@ -2343,6 +2459,9 @@ console.log("示例代码块");
       [/^已记录 (\d+) 个实时事件。$/, "$1 live event(s) recorded."],
       [/^(\d+) 个块，已检测标题$/, "$1 blocks, titled"],
       [/^(\d+) 个块，(\d+) 个字符，可以写入。$/, "$1 block(s), $2 character(s), ready to write."],
+      [/^标题已检测 · (\d+) 张图片 · (\d+) 个代码块$/, "Title found · $1 images · $2 code blocks"],
+      [/^未检测标题 · (\d+) 张图片 · (\d+) 个代码块$/, "No title · $1 images · $2 code blocks"],
+      [/^(\d+(?:,\d+)*) 字 · 图片 (\d+) · 代码块 (\d+)$/, "$1 chars · $2 images · $3 code blocks"],
       [/^(\d+(?:,\d+)*) 字$/, "$1 chars"],
       [/^已加入 (\d+) 篇 Markdown 草稿。$/, "Queued $1 Markdown drafts."],
       [/^(\d+) 篇草稿在队列中$/, "$1 queued drafts"],
@@ -2353,6 +2472,10 @@ console.log("示例代码块");
       [/^(\d+) 张图片已上传，(\d+) 张保留为链接$/, "$1 image(s) uploaded, $2 kept as links"],
       [/^(\d+) 张图片已就绪，(\d+) 张需要处理$/, "$1 image(s) ready, $2 kept as links"],
       [/^(\d+) 张图片已上传$/, "$1 image(s) uploaded"],
+      [/^图片：(\d+)$/, "Images: $1"],
+      [/^网页图片：(\d+)$/, "Web images: $1"],
+      [/^网页图片：(\d+) 已就绪$/, "Web images: $1 ready"],
+      [/^网页图片：(\d+) 张可能保留为链接$/, "Web images: $1 may stay as links"],
       [/^还有 (\d+) 个导入项$/, "$1 more import item(s)"],
       [/^还有 (\d+) 个账本项$/, "$1 more ledger item(s)"],
       [/^另有 (\d+) 个特殊内容步骤已隐藏。$/, "$1 additional special-content step(s) hidden."],
@@ -2484,7 +2607,7 @@ console.log("示例代码块");
   }
 
   function isRemoteHttpImageSource(source) {
-    return /^https?:\/\//i.test(String(source || "").trim());
+    return shared.isRemoteHttpImageSource(source);
   }
 
   function localImageSegments(parsed = latestParsed) {
@@ -2580,25 +2703,10 @@ console.log("示例代码块");
     if (!parsed?.segments?.length) return "Step 1: paste Markdown, or choose a .md file.";
     const resolvedCounts = counts || shared.segmentCounts(parsed.segments);
     const parts = [];
-    if (parsed.title) parts.push(currentLanguage === "zh" ? "标题" : "title");
-    if (resolvedCounts.text) parts.push(currentLanguage === "zh" ? "正文" : "body");
-    const remoteImages = remoteHttpImageSegments(parsed).length;
-    const localImages = Math.max(0, (resolvedCounts.image || 0) - remoteImages);
-    if (remoteImages) parts.push(formatRecognizedItem(remoteImages, "web image", "web images", "张网页图片"));
-    if (localImages) parts.push(formatRecognizedItem(localImages, "local image", "local images", "张本地图片"));
-    if (resolvedCounts.table) parts.push(formatRecognizedItem(resolvedCounts.table, "table", "tables", "个表格"));
-    if (resolvedCounts.tweet) parts.push(formatRecognizedItem(resolvedCounts.tweet, "tweet", "tweets", "条推文"));
-    if (resolvedCounts.code) parts.push(formatRecognizedItem(resolvedCounts.code, "code block", "code blocks", "个代码块"));
-    if (resolvedCounts.divider) parts.push(formatRecognizedItem(resolvedCounts.divider, "divider", "dividers", "条分隔线"));
-    const summary = parts.length ? parts.join(currentLanguage === "zh" ? "、" : ", ") : currentLanguage === "zh" ? "正文" : "body";
-    return currentLanguage === "zh" ? `已识别：${summary}` : `Recognized: ${summary}`;
-  }
-
-  function draftTargetStateText() {
-    const status = latestPageStatus || {};
-    if (status.hasEditor) return "Will write to the currently open X Article draft.";
-    if (status.isArticleRoute) return "X Articles is open; Write will open or create a draft.";
-    return "No X Article page detected yet. Write will open or create a draft.";
+    parts.push(parsed.title ? "Title found" : "No title");
+    parts.push(pluralizeUnit(resolvedCounts.image || 0, "image"));
+    parts.push(pluralizeUnit(resolvedCounts.code || 0, "code block"));
+    return parts.join(" · ");
   }
 
   function updateDraftBrief() {
@@ -2608,10 +2716,6 @@ console.log("示例代码块");
     els.draftBrief.dataset.tone = hasDraft ? "ready" : "idle";
     els.draftBrief.hidden = !hasDraft;
     setLocalizedText(els.draftRecognized, draftRecognitionText());
-    if (els.draftTargetState) {
-      els.draftTargetState.hidden = !hasDraft;
-      if (hasDraft) setLocalizedText(els.draftTargetState, draftTargetStateText());
-    }
   }
 
   function remoteImageProbeKey(segment) {
@@ -2652,18 +2756,8 @@ console.log("示例代码块");
   }
 
   function ensureLatestParsedFromDraft() {
-    const markdown = els.markdown.value;
-    if (!markdown.trim()) return null;
-    try {
-      const parsed = parseDraftMarkdown(markdown);
-      latestParsed = parsed;
-      latestCounts = shared.segmentCounts(parsed.segments);
-      syncRemoteImageAccessStatusFromDraft(parsed);
-      return parsed;
-    } catch (error) {
-      log(`Could not analyze draft: ${error?.message || error}`);
-      return latestParsed;
-    }
+    analyzeDraftNow();
+    return latestParsed;
   }
 
   function draftFingerprint(markdown) {
@@ -2927,6 +3021,31 @@ console.log("示例代码块");
     setDraftDropStatus("Draft added", queuedDraftAddedDetail(count), "done");
   }
 
+  function markQueueItemsEntered(items = []) {
+    for (const item of items) {
+      if (item?.id) animatedQueueItemIds.add(item.id);
+    }
+    if (!animatedQueueItemIds.size) return;
+    window.clearTimeout(queueMotionTimer);
+    queueMotionTimer = window.setTimeout(() => {
+      if (!animatedQueueItemIds.size) return;
+      animatedQueueItemIds = new Set();
+      renderDraftQueue();
+    }, 780);
+  }
+
+  function isMarkdownFile(file) {
+    return MARKDOWN_FILE_RE.test(file?.name || "");
+  }
+
+  function markdownFilesFrom(files) {
+    return Array.from(files || []).filter(isMarkdownFile);
+  }
+
+  function showMarkdownLoadError(detail = MARKDOWN_LOAD_ERROR_DETAIL) {
+    setDraftDropStatus(MARKDOWN_LOAD_ERROR_TITLE, detail, "error");
+  }
+
   function queueStatusLabel(item) {
     if (item.status === "writing" || item.id === activeWriteQueueItemId) return "Writing";
     return "Queued";
@@ -2985,11 +3104,11 @@ console.log("示例代码块");
   function addDraftToQueue(markdown, { fileName = "", source = "typed", activate = true, statusTitle = "Markdown loaded", logMessage = "", remember = true } = {}) {
     const item = createQueueItemFromMarkdown(markdown, { fileName, source });
     if (!item) {
-      setDraftDropStatus("Could not load Markdown", "Try a .md, .markdown, .txt file, or plain Markdown text.", "error");
+      showMarkdownLoadError();
       return null;
     }
     if (queueItemStorageSize(item) > MAX_DRAFT_QUEUE_ITEM_BYTES) {
-      setDraftDropStatus("Could not load Markdown", queueDraftTooLargeDetail(), "error");
+      showMarkdownLoadError(queueDraftTooLargeDetail());
       log(queueDraftTooLargeDetail());
       return null;
     }
@@ -3005,6 +3124,7 @@ console.log("示例代码块");
       loadQueueItem(item.id, { remember });
     } else {
       if (activate) activeQueueItemId = item.id;
+      markQueueItemsEntered([item]);
       renderDraftQueue();
       showQueuedDraftAdded(1);
     }
@@ -3025,7 +3145,7 @@ console.log("示例代码块");
     }
     const safe = shared.escapeHtml;
     els.draftQueueList.innerHTML = draftQueue.map((item, index) => `
-      <li class="draft-queue-item" data-queue-id="${safe(item.id)}" data-status="${safe(item.status)}" ${item.id === activeQueueItemId ? 'data-active="true"' : ""}>
+      <li class="draft-queue-item" data-queue-id="${safe(item.id)}" data-status="${safe(item.status)}" ${animatedQueueItemIds.has(item.id) ? 'data-motion="entered"' : ""} ${item.id === activeQueueItemId ? 'data-active="true"' : ""}>
         <button class="draft-queue-main" type="button" data-queue-action="edit" data-queue-id="${safe(item.id)}" title="${safe(localizeText("Edit draft"))}" aria-label="${safe(localizeText("Edit draft"))}">
           <span>${index + 1}</span>
           <strong>${safe(item.title || item.fileName || "Untitled Markdown")}</strong>
@@ -3065,7 +3185,7 @@ console.log("示例代码块");
       .filter(Boolean);
     const normalized = allNormalized.filter((item) => queueItemStorageSize(item) <= MAX_DRAFT_QUEUE_ITEM_BYTES);
     if (allNormalized.length && !normalized.length) {
-      setDraftDropStatus("Could not load Markdown", queueDraftTooLargeDetail(), "error");
+      showMarkdownLoadError(queueDraftTooLargeDetail());
       log(queueDraftTooLargeDetail());
     }
     if (!normalized.length) return [];
@@ -3077,6 +3197,7 @@ console.log("示例代码块");
     draftQueue = [...baseQueue, ...nextItems].slice(-MAX_DRAFT_QUEUE);
     if (activateFirst) activeQueueItemId = nextItems[0].id;
     persistDraftQueue();
+    markQueueItemsEntered(nextItems);
     renderDraftQueue();
     showQueuedDraftAdded(nextItems.length);
     return nextItems;
@@ -3210,7 +3331,7 @@ console.log("示例代码块");
   }
 
   async function filesToQueueItems(files) {
-    const markdownFiles = files.filter((file) => /\.(md|markdown|mdown|mkd|txt)$/i.test(file.name || ""));
+    const markdownFiles = markdownFilesFrom(files);
     const items = [];
     for (const file of markdownFiles) {
       const markdown = await file.text();
@@ -3305,16 +3426,28 @@ console.log("示例代码块");
     const vault = currentVault();
     const showLocalImages = Boolean(localImages.length || vault?.configured);
     if (els.localImagesPanel) els.localImagesPanel.hidden = !showLocalImages;
-
-    const liveResult = buildLiveResultEvidence();
-    const progressActive = ["running", "parsed", "complete", "error"].includes(latestProgress?.state);
-    const hasImportRecord = Boolean(latestEvidence?.kind?.startsWith("import"));
-    const hasAnyRecord = Boolean(latestEvidence || liveResult.checked > 0 || progressActive);
-    const showAfterImport = Boolean(progressActive || hasImportRecord || liveResult.checked > 0);
     syncProgressiveSectionVisibility();
   }
 
+  function scheduleAnalyzeDraft(delay = DRAFT_ANALYZE_DELAY_MS) {
+    window.clearTimeout(draftAnalyzeTimer);
+    draftAnalyzeTimer = window.setTimeout(() => {
+      draftAnalyzeTimer = null;
+      analyzeDraft();
+    }, delay);
+  }
+
+  function analyzeDraftNow() {
+    window.clearTimeout(draftAnalyzeTimer);
+    draftAnalyzeTimer = null;
+    analyzeDraft();
+  }
+
   function analyzeDraft() {
+    renderDraftAnalysis();
+  }
+
+  function renderDraftAnalysis() {
     const markdown = els.markdown.value;
     if (!markdown.trim()) {
       latestParsed = null;
@@ -3365,7 +3498,7 @@ console.log("示例代码块");
       setDraftDropStatus("Markdown loaded", draftReadyDetail(markdown.length, counts), "done");
     } catch (error) {
       log(`Could not analyze draft: ${error?.message || error}`);
-      setDraftDropStatus("Could not load Markdown", error?.message || "Try a .md, .markdown, .txt file, or plain Markdown text.", "error");
+      showMarkdownLoadError(error?.message || MARKDOWN_LOAD_ERROR_DETAIL);
     }
   }
 
@@ -4068,8 +4201,8 @@ console.log("示例代码块");
     log("Focus the Markdown editor below.");
   }
 
-  function runImportButtonAction() {
-    primeSuccessAudio();
+  async function runImportButtonAction() {
+    await primeSuccessAudio();
     const checks = buildPreflightChecks();
     const gate = getImportGate(checks);
     const action = primaryImportAction(gate);
@@ -4149,25 +4282,25 @@ console.log("示例代码块");
     return {
       tone: "ready",
       text: imageCount
-        ? `${imageCount} image(s) will upload through X when possible while writing to X draft.`
-        : "Uses current X Article, or creates one."
+        ? `Images: ${imageCount}`
+        : "Ready to write."
     };
   }
 
   function remoteImageWriteHint(remoteCount) {
     if (remoteImageProbeStatus.state === "checking") {
-      return { tone: "ready", text: `${remoteCount} web image(s) will be tried while writing to X draft.` };
+      return { tone: "ready", text: `Web images: ${remoteCount}` };
     }
     if (remoteImageProbeStatus.state === "checked" && remoteImageProbeStatus.fail) {
       return {
         tone: "warn",
-        text: `${remoteImageProbeStatus.fail} web image(s) may stay as links unless the URLs are replaced.`
+        text: `Web images: ${remoteImageProbeStatus.fail} may stay as links`
       };
     }
     if (remoteImageProbeStatus.state === "checked") {
-      return { tone: "ready", text: `${remoteCount} web image(s) will upload through X when reachable while writing to X draft.` };
+      return { tone: "ready", text: `Web images: ${remoteCount} ready` };
     }
-    return { tone: "ready", text: `${remoteCount} web image(s) will be tried while writing to X draft. Unreachable images stay as links.` };
+    return { tone: "ready", text: `Web images: ${remoteCount}` };
   }
 
   function updateNextAction(checks = null, gate = null) {
@@ -5194,6 +5327,14 @@ console.log("示例代码块");
     translateDynamicDom(els.draftDropStatus);
   }
 
+  function setCompactImportStatus(summary = null) {
+    if (els.importHint) {
+      els.importHint.dataset.tone = "done";
+      delete els.importHint.dataset.i18n;
+      setLocalizedText(els.importHint, "Written. Review in X.");
+    }
+  }
+
   function dismissDraftDropStatus() {
     if (!els.draftDropStatus) return;
     els.draftDropStatus.hidden = true;
@@ -5209,9 +5350,14 @@ console.log("示例代码块");
     window.setTimeout(() => els.markdown?.classList.remove("draft-ack"), 520);
   }
 
-  function draftReadyDetail(length) {
+  function draftReadyDetail(length, counts = latestCounts) {
     const formattedLength = Number(length || 0).toLocaleString();
-    return currentLanguage === "zh" ? `${formattedLength} 字，可写入到 X 草稿` : `${formattedLength} chars, ready to write to X draft`;
+    const resolvedCounts = counts || shared.segmentCounts([]);
+    return [
+      `${formattedLength} chars`,
+      pluralizeUnit(resolvedCounts.image || 0, "image"),
+      pluralizeUnit(resolvedCounts.code || 0, "code block")
+    ].join(" · ");
   }
 
   function createLiveProgressState() {
@@ -5235,6 +5381,9 @@ console.log("示例代码块");
     latestProgress = createLiveProgressState();
     if (reason === "import") lastSuccessFeedbackKey = "";
     if (reason === "import") {
+      window.clearTimeout(runSummaryCollapseTimer);
+      runSummaryCollapseTimer = null;
+      if (els.runSummary) els.runSummary.hidden = true;
       latestProgress.state = "running";
       latestProgress.level = "work";
       latestProgress.text = "Writing queued";
@@ -5404,10 +5553,14 @@ console.log("示例代码块");
     if (message?.type !== "xposter:event") return;
     const payload = message.payload || {};
     const eventName = message.event || payload.type || "message";
-    if (payload.text) log(progressTextForEvent("status", payload));
-    if (eventName === "complete") log("Writing complete.");
+    if (payload.text && shouldLogProgressEvent(eventName, payload)) log(progressTextForEvent("status", payload));
     if (eventName === "error" && payload.error) log(`Writing failed: ${payload.error}`);
     recordLiveProgressEvent(eventName, payload);
+  }
+
+  function shouldLogProgressEvent(eventName, payload = {}) {
+    const level = payload.level || progressLevelForEvent(eventName);
+    return eventName === "error" || level === "error" || level === "warn";
   }
 
   function recordLiveProgressEvent(eventName, payload = {}) {
@@ -5476,7 +5629,7 @@ console.log("示例代码块");
       latestProgress.state = "running";
       latestProgress.level = payload.level || "work";
       latestProgress.text = entry.text;
-      latestProgress.detail = "Received an import progress update from the active X tab.";
+      latestProgress.detail = localizeText("Received an import progress update from the active X tab.");
       latestProgress.percent = Math.max(latestProgress.percent || 0, 12);
     }
 
@@ -5500,13 +5653,13 @@ console.log("示例代码块");
   }
 
   function progressDetailForStatus(text) {
-    if (/prepar/i.test(text)) return "Preparing Markdown, images, and the X editor.";
-    if (/writing|paste|structured/i.test(text)) return "Writing the article body into X.";
-    if (/upload/i.test(text)) return "Uploading prepared images and rendered tables through X.";
-    if (/reorder|marker|special|insert/i.test(text)) return "Placing images, tweets, code, and dividers into the article.";
-    if (/title|cover/i.test(text)) return "Setting the title and cover after the body import.";
-    if (/imported|written|complete/i.test(text)) return "Writing finished.";
-    return text || "Live status received from the active X tab.";
+    if (/prepar|准备/.test(text)) return localizeText("Preparing Markdown, images, and the X editor.");
+    if (/writing|paste|structured|写入/.test(text)) return localizeText("Writing the article body into X.");
+    if (/upload|上传/.test(text)) return localizeText("Uploading prepared images and rendered tables through X.");
+    if (/reorder|marker|special|insert|放置|清理/.test(text)) return localizeText("Placing images, tweets, code, and dividers into the article.");
+    if (/title|cover|标题|封面/.test(text)) return localizeText("Setting the title and cover after the body import.");
+    if (/imported|written|complete|完成|已写入/.test(text)) return localizeText("Writing finished.");
+    return text ? localizeText(text) : localizeText("Live status received from the active X tab.");
   }
 
   function progressPercentForStatus(text, level) {
@@ -5523,7 +5676,7 @@ console.log("示例代码块");
   }
 
   function summarizeProgressCompletion(summary) {
-    if (!summary) return "Writing finished.";
+    if (!summary) return localizeText("Writing finished.");
     const images = summary.images || {};
     const warnings = summary.mediaWarnings || {};
     const main = summary.main || {};
@@ -5556,12 +5709,41 @@ console.log("示例代码块");
     syncProgressiveSectionVisibility();
   }
 
+  function isLiveProgressVisible(progress = latestProgress) {
+    return ["running", "parsed", "error"].includes(progress?.state);
+  }
+
+  function hasRunSummaryWarnings(summary) {
+    if (!summary) return false;
+    const main = summary.main || {};
+    const warnings = summary.mediaWarnings || {};
+    return Boolean(
+      Number(warnings.total || 0) ||
+      Number(main.imgFail || 0) ||
+      Number(main.atomicFail || 0) ||
+      (main.title?.requested && !summarizeTitleResult(main.title).includes("Set")) ||
+      (main.cover?.requested && !summarizeCoverResult(main.cover).startsWith("Set"))
+    );
+  }
+
+  function scheduleRunSummaryCollapse(summary) {
+    window.clearTimeout(runSummaryCollapseTimer);
+    runSummaryCollapseTimer = null;
+    if (!els.runSummary || hasRunSummaryWarnings(summary)) return;
+    runSummaryCollapseTimer = window.setTimeout(() => {
+      runSummaryCollapseTimer = null;
+      if (!hasRunSummaryWarnings(latestProgress?.summary)) {
+        els.runSummary.hidden = true;
+        syncRecordPanel();
+      }
+    }, 3600);
+  }
+
   function syncProgressiveSectionVisibility() {
     const liveResult = buildLiveResultEvidence();
-    const progressActive = ["running", "parsed", "complete", "error"].includes(latestProgress?.state);
-    const hasImportRecord = Boolean(latestEvidence?.kind?.startsWith("import"));
-    const hasAnyRecord = Boolean(latestEvidence || liveResult.checked > 0 || progressActive);
-    if (els.liveProgress) els.liveProgress.hidden = !progressActive;
+    const progressVisible = isLiveProgressVisible();
+    const hasAnyRecord = Boolean(latestEvidence || liveResult.checked > 0 || progressVisible);
+    if (els.liveProgress) els.liveProgress.hidden = !progressVisible;
     if (els.verificationPanel) els.verificationPanel.hidden = true;
     if (els.liveResultPanel) els.liveResultPanel.hidden = true;
     if (els.evidenceDetails) els.evidenceDetails.hidden = !hasAnyRecord;
@@ -5890,9 +6072,9 @@ console.log("示例代码块");
   }
 
   function setReadiness({ target, editor, vault }) {
-    els.targetReady.textContent = target;
-    els.editorReady.textContent = editor;
-    els.vaultReady.textContent = vault;
+    els.targetReady.textContent = localizeText(target);
+    els.editorReady.textContent = localizeText(editor);
+    els.vaultReady.textContent = localizeText(vault);
   }
 
   async function prepareImportTarget() {
@@ -5984,9 +6166,7 @@ console.log("示例代码块");
     if (!currentDraftRecord()) rememberDraftHistory("typed");
     updatePreflight();
     updateWriteButton({ busy: true });
-    primeSuccessAudio();
     resetLiveProgress("import");
-    log(batch ? "Batch draft writing started." : "Writing article started.");
     const target = await prepareSimpleWriteTarget(parsed);
     if (!target.ok) {
       log(target.reason || "Could not prepare X Article.");
@@ -6015,7 +6195,7 @@ console.log("示例代码块");
     if (response?.ok) {
       const seconds = ((response.summary?.elapsedMs || 0) / 1000).toFixed(1);
       const warnings = response.summary?.mediaWarnings?.total || response.summary?.main?.imgFail || 0;
-      log(warnings ? `Writing complete in ${seconds}s with ${warnings} media warning(s).` : `Writing complete in ${seconds}s.`);
+      if (warnings) log(`Writing complete in ${seconds}s with ${warnings} media warning(s).`);
       if (latestProgress.state !== "complete") recordLiveProgressEvent("complete", { summary: response.summary });
       renderRunSummary(response.summary);
       captureEvidence("import", { result: response, targetContext: target.targetContext, pageStatus: latestPageStatus, diagnostics: latestDiagnostics });
@@ -6034,7 +6214,11 @@ console.log("示例代码块");
     }
     updatePreflight();
     updateWriteButton();
-    refreshPageState();
+    const pageStateRefresh = refreshPageState().catch(() => null);
+    if (response?.ok) {
+      setCompactImportStatus(response.summary);
+      void pageStateRefresh.then(() => setCompactImportStatus(response.summary));
+    }
     return response?.ok ? { ok: true, response } : { ok: false, error: response?.error || "unknown error", response };
   }
 
@@ -6088,13 +6272,17 @@ console.log("示例代码块");
 
   function renderRunSummary(summary) {
     if (!summary) return;
+    window.clearTimeout(runSummaryCollapseTimer);
+    runSummaryCollapseTimer = null;
     els.runSummary.hidden = false;
     const imageOk = summary.images?.ok || 0;
     const imageFail = summary.images?.fail || 0;
     const uploadFail = summary.main?.imgFail || 0;
     const imageWarnings = (summary.mediaWarnings?.images || 0) + uploadFail;
+    const hasWarnings = hasRunSummaryWarnings(summary);
+    els.runSummary.dataset.tone = hasWarnings ? "warn" : "done";
     if (els.summaryMessage) {
-      els.summaryMessage.dataset.tone = imageWarnings || summary.mediaWarnings?.tables ? "warn" : "done";
+      els.summaryMessage.dataset.tone = hasWarnings ? "warn" : "done";
       els.summaryMessage.textContent = summarizeRunMessage(summary);
     }
     els.summaryImages.textContent = imageWarnings
@@ -6109,6 +6297,7 @@ console.log("示例代码块");
     els.summaryElapsed.textContent = `${((summary.elapsedMs || 0) / 1000).toFixed(1)}s`;
     updateWorkflowRail();
     translateDynamicDom(els.runSummary);
+    scheduleRunSummaryCollapse(summary);
   }
 
   function summarizeRunMessage(summary) {
@@ -6244,37 +6433,47 @@ console.log("示例代码块");
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
-    input.accept = ".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain";
+    input.accept = MARKDOWN_FILE_ACCEPT;
     input.addEventListener("change", async () => {
       const files = Array.from(input.files || []);
       input.remove();
       if (!files.length) return;
-      const markdownFiles = files.filter((file) => /\.(md|markdown|mdown|mkd|txt)$/i.test(file.name || ""));
-      if (markdownFiles.length > 1) {
-        const added = addDraftQueueItems(await filesToQueueItems(markdownFiles), {
-          activateFirst: true,
-          source: "file"
-        });
-        if (added.length) {
-          log(`Queued ${added.length} Markdown draft${added.length === 1 ? "" : "s"}.`);
-        } else {
-          setDraftDropStatus("Markdown queued", "No new Markdown drafts were added.", "idle");
-          log("No new Markdown drafts were added.");
-        }
-      } else if (markdownFiles[0]) {
-        await loadMarkdownFileIntoDraft(markdownFiles[0], "file");
-      } else {
-        setDraftDropStatus("Could not load Markdown", "Try a .md, .markdown, .txt file, or plain Markdown text.", "error");
-      }
+      await loadMarkdownFiles(markdownFilesFrom(files), "file");
       showWorkspacePanel("draft");
     });
     input.click();
   }
 
+  async function loadMarkdownFiles(markdownFiles, source) {
+    if (markdownFiles.length > 1) {
+      await queueMarkdownFiles(markdownFiles, source);
+      return;
+    }
+    if (markdownFiles[0]) {
+      await loadMarkdownFileIntoDraft(markdownFiles[0], source);
+      return;
+    }
+    showMarkdownLoadError();
+  }
+
+  async function queueMarkdownFiles(markdownFiles, source) {
+    const added = addDraftQueueItems(await filesToQueueItems(markdownFiles), {
+      activateFirst: true,
+      source
+    });
+    if (added.length) {
+      log(`Queued ${added.length} Markdown draft${added.length === 1 ? "" : "s"}.`);
+      return added;
+    }
+    setDraftDropStatus("Markdown queued", NO_NEW_DRAFTS_DETAIL, "idle");
+    log(NO_NEW_DRAFTS_DETAIL);
+    return added;
+  }
+
   async function loadMarkdownFileIntoDraft(file, source = "file") {
-    if (!file?.name || !/\.(md|markdown|mdown|mkd|txt)$/i.test(file.name)) {
+    if (!isMarkdownFile(file)) {
       log("Choose a Markdown file.");
-      setDraftDropStatus("Could not load Markdown", "Try a .md, .markdown, .txt file, or plain Markdown text.", "error");
+      showMarkdownLoadError();
       return;
     }
     try {
@@ -6296,8 +6495,8 @@ console.log("示例代码块");
         });
       }
     } catch (error) {
-      const detail = error?.message || "Try a .md, .markdown, .txt file, or plain Markdown text.";
-      setDraftDropStatus("Could not load Markdown", detail, "error");
+      const detail = error?.message || MARKDOWN_LOAD_ERROR_DETAIL;
+      showMarkdownLoadError(detail);
       log(`Could not load ${file.name}: ${detail}`);
     }
   }
@@ -6317,12 +6516,12 @@ console.log("示例代码块");
 
   function hasMarkdownFile(dataTransfer) {
     const files = Array.from(dataTransfer?.files || []);
-    if (files.some((file) => /\.(md|markdown|mdown|mkd|txt)$/i.test(file.name || ""))) return true;
+    if (files.some(isMarkdownFile)) return true;
     const items = Array.from(dataTransfer?.items || []);
     return items.some((item) => {
       if (item?.kind !== "file") return false;
       if (!item.type) return true;
-      return /^(text\/markdown|text\/plain|application\/octet-stream)$/i.test(item.type);
+      return MARKDOWN_TRANSFER_MIME_RE.test(item.type);
     });
   }
 
@@ -6398,18 +6597,9 @@ console.log("示例代码块");
       dragCancelled = false;
       deactivateDropzone();
       setDraftDropStatus("Reading Markdown...", "Reading dropped Markdown.", "ready");
-      const markdownFiles = Array.from(event.dataTransfer.files || []).filter((item) => /\.(md|markdown|mdown|mkd|txt)$/i.test(item.name || ""));
+      const markdownFiles = markdownFilesFrom(event.dataTransfer.files);
       if (markdownFiles.length > 1) {
-        const added = addDraftQueueItems(await filesToQueueItems(markdownFiles), {
-          activateFirst: true,
-          source: "drop-file"
-        });
-        if (added.length) {
-          log(`Queued ${added.length} Markdown draft${added.length === 1 ? "" : "s"}.`);
-        } else {
-          setDraftDropStatus("Markdown queued", "No new Markdown drafts were added.", "idle");
-          log("No new Markdown drafts were added.");
-        }
+        await queueMarkdownFiles(markdownFiles, "drop-file");
       } else if (markdownFiles[0]) {
         await loadMarkdownFileIntoDraft(markdownFiles[0], "drop-file");
       } else {
@@ -6468,7 +6658,33 @@ console.log("示例代码块");
 
   function saveDraft() {
     if (!hasChromeApi()) return;
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
     chrome.storage.local.set({ [STORAGE_DRAFT]: els.markdown.value });
+  }
+
+  function scheduleSaveDraft() {
+    if (!hasChromeApi()) return;
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = window.setTimeout(() => {
+      draftSaveTimer = null;
+      saveDraft();
+    }, DRAFT_SAVE_DELAY_MS);
+  }
+
+  function flushDraftSave() {
+    if (!draftSaveTimer) return;
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
+    saveDraft();
+  }
+
+  function scheduleRecordHistoryRender() {
+    window.clearTimeout(recordSearchTimer);
+    recordSearchTimer = window.setTimeout(() => {
+      recordSearchTimer = null;
+      renderRecordHistory();
+    }, RECORD_SEARCH_DELAY_MS);
   }
 
   async function restoreDraft() {
@@ -6521,10 +6737,14 @@ console.log("示例代码块");
       }
       if (changes[STORAGE_DRAFT_QUEUE]) {
         const previousLength = draftQueue.length;
+        const previousIds = new Set(draftQueue.map((item) => item.id));
         draftQueue = Array.isArray(changes[STORAGE_DRAFT_QUEUE].newValue)
           ? changes[STORAGE_DRAFT_QUEUE].newValue.map(normalizeQueueItem).filter(Boolean).slice(0, MAX_DRAFT_QUEUE)
           : [];
         if (activeQueueItemId && !draftQueue.some((item) => item.id === activeQueueItemId)) activeQueueItemId = null;
+        if (draftQueue.length > previousLength) {
+          markQueueItemsEntered(draftQueue.filter((item) => !previousIds.has(item.id)));
+        }
         renderDraftQueue();
         if (draftQueue.length > previousLength) {
           showWorkspacePanel("draft");
@@ -6635,7 +6855,7 @@ console.log("示例代码块");
     };
     addRecordHistoryEntry(latestEvidence);
     if (kind === "import" || kind === "import-error") activeDraftFinalized = true;
-    els.evidenceMeta.textContent = `${kind} captured ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    els.evidenceMeta.textContent = `${kind} record saved at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     els.evidenceText.textContent = JSON.stringify(latestEvidence, jsonSafeReplacer, 2);
     els.copyEvidence.disabled = false;
     updateProgressiveSections();
@@ -7006,7 +7226,7 @@ console.log("示例代码块");
       : [];
     latestEvidence = recordHistory[0]?.evidence || latestEvidence;
     if (latestEvidence) {
-      els.evidenceMeta.textContent = `${latestEvidence.kind} captured ${new Date(latestEvidence.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      els.evidenceMeta.textContent = `${latestEvidence.kind} record saved at ${new Date(latestEvidence.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
       els.evidenceText.textContent = JSON.stringify(latestEvidence, jsonSafeReplacer, 2);
       els.copyEvidence.disabled = false;
     }
@@ -7092,6 +7312,7 @@ console.log("示例代码块");
       els.recordSearchSummary.textContent = searchSummary;
     }
     if (els.clearRecordHistory) els.clearRecordHistory.disabled = recordHistory.length === 0;
+    if (!recordHistory.length) closeRecordClearConfirm();
     if (!total) {
       syncRecordEditSheet();
       els.recordHistoryList.innerHTML = `<li class="record-history-empty">Paste or load Markdown to save the first recoverable draft.</li>`;
@@ -7170,6 +7391,7 @@ console.log("示例代码块");
   }
 
   async function clearRecordHistory() {
+    closeRecordClearConfirm();
     recordHistory = [];
     latestEvidence = null;
     activeDraftRecordId = null;
@@ -7178,12 +7400,44 @@ console.log("示例代码块");
     activeRecordEditorId = null;
     window.clearTimeout(draftInputHistoryTimer);
     if (hasChromeApi()) await chrome.storage.local.remove(STORAGE_RECORD_HISTORY).catch(() => {});
-    els.evidenceMeta.textContent = "No local record saved yet.";
-    els.evidenceText.textContent = "Run a publishing check or import to save a record.";
+    els.evidenceMeta.textContent = "No technical record saved yet.";
+    els.evidenceText.textContent = "Run Check article or Write article to save a technical record.";
     els.copyEvidence.disabled = true;
     renderRecordHistory();
     updateProgressiveSections();
     log("Records cleared.");
+  }
+
+  function openRecordClearConfirm() {
+    if (!els.recordClearConfirm || !els.clearRecordHistory || els.clearRecordHistory.disabled) return;
+    els.recordClearConfirm.hidden = false;
+    els.clearRecordHistory.setAttribute("aria-expanded", "true");
+    translateDynamicDom(els.recordClearConfirm);
+    window.setTimeout(() => els.confirmRecordClear?.focus?.(), 0);
+  }
+
+  function closeRecordClearConfirm() {
+    if (els.recordClearConfirm) els.recordClearConfirm.hidden = true;
+    if (els.clearRecordHistory) els.clearRecordHistory.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleRecordClearConfirm() {
+    if (!els.recordClearConfirm || els.recordClearConfirm.hidden) openRecordClearConfirm();
+    else closeRecordClearConfirm();
+  }
+
+  function handleRecordClearDismiss(event) {
+    if (els.recordClearConfirm?.hidden) return;
+    if (event.key && event.key !== "Escape") return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeRecordClearConfirm();
+      els.clearRecordHistory?.focus?.();
+      return;
+    }
+    const target = event.target;
+    if (target === els.clearRecordHistory || els.recordClearConfirm?.contains(target)) return;
+    closeRecordClearConfirm();
   }
 
   function restoreRecordMarkdown(recordId) {
@@ -7441,81 +7695,65 @@ console.log("示例代码块");
     const resolvedGate = gate || getImportGate(resolvedChecks);
     const liveResult = buildLiveResultEvidence();
     const hasImportEvidence = Boolean(latestEvidence?.kind?.startsWith("import"));
-    const loaded = hasChromeApi();
     const targetReady = byId.get("target")?.tone === "ok";
-    const bridgeReady = byId.get("bridge")?.tone === "ok";
-    const uploadsReady = byId.get("uploads")?.tone === "ok";
     const needsRemote = remoteHttpImageSegments(latestParsed).length > 0;
-    const packageReady = liveResult.complete && hasImportEvidence;
+    const hasDraftRecord = Boolean(recordHistory.find(recordHasMarkdown) || recordHasMarkdown(latestEvidence));
+    const importSucceeded = latestEvidence?.kind === "import";
+    const importFailed = latestEvidence?.kind === "import-error";
+    const recordTitle = recordDisplayTitle(recordHistory.find(recordHasMarkdown) || normalizeRecordHistoryEntry(latestEvidence || {}, {}));
+    const linkedArticle = latestEvidence?.targetContext?.articleId || latestPageStatus?.targetContext?.articleId || latestPageStatus?.articleId || "";
     const items = [
       {
-        id: "loaded",
-        label: "Extension loaded",
-        tone: loaded ? "ok" : "warn",
-        detail: loaded
-          ? "Side panel is running inside the extension context."
-          : "Load xPoster as an unpacked extension in Chrome."
+        id: "draft",
+        label: "Draft saved",
+        tone: hasDraftRecord || byId.get("draft")?.tone === "ok" ? "ok" : "idle",
+        detail: hasDraftRecord
+          ? `${recordTitle || "Markdown draft"} is recoverable from Records.`
+          : byId.get("draft")?.tone === "ok"
+            ? `${latestParsed?.segments?.length || 0} draft part(s) loaded.`
+            : "Load Markdown to create a recoverable draft record."
       },
       {
-        id: "target",
+        id: "article",
         label: "X Article",
-        tone: targetReady ? "ok" : "warn",
-        detail: targetReady
-          ? latestPageStatus?.hasEditor
-            ? "Active tab is an X Article editor."
-            : "Active tab is X Articles; open or create a draft."
-          : "Open x.com/compose/articles in the active tab."
-      },
-      {
-        id: "bridge",
-        label: "Can write to X",
-        tone: bridgeReady && uploadsReady ? "ok" : latestDiagnostics ? "error" : "warn",
-        detail:
-          bridgeReady && uploadsReady
-            ? "xPoster can reach the editor and upload media."
-            : latestDiagnostics
-              ? "The check found an editor or upload blocker."
-              : "Click Check article after the X Article editor is visible."
-      },
-      {
-        id: "remote-images",
-        label: "Web images",
-        tone: "ok",
-        detail: needsRemote
-          ? "xPoster tries web images during Write; unreachable images stay as links."
-          : "No web image links in this draft."
-      },
-      {
-        id: "import",
-        label: "Import completed",
-        tone: hasImportEvidence ? (latestEvidence.kind === "import" ? "ok" : "error") : resolvedGate.ok ? "ready" : "idle",
-        detail: hasImportEvidence
-          ? latestEvidence.kind === "import"
-            ? "Import record saved."
-            : "Last import produced an error record."
-          : resolvedGate.ok
-            ? "Ready to import; run Import."
-            : resolvedGate.message
+        tone: targetReady || linkedArticle ? "ok" : byId.get("draft")?.tone === "ok" ? "warn" : "idle",
+        detail: linkedArticle
+          ? `Linked to article ${linkedArticle}.`
+          : targetReady
+            ? "Current X Article is ready for this draft."
+            : "Open or create the X Article you want to fill."
       },
       {
         id: "result",
-        label: "Article reviewed",
-        tone: liveResult.complete ? "ok" : hasImportEvidence ? "warn" : "idle",
-        detail: `${liveResult.checked}/${liveResult.total} article review checks recorded.`
+        label: "Write result",
+        tone: importSucceeded ? "ok" : importFailed ? "error" : resolvedGate.ok ? "ready" : "idle",
+        detail: importSucceeded
+          ? needsRemote
+            ? "Article was written. Web image links that could not download stayed as links."
+            : "Article was written into X. Review it there before publishing."
+          : importFailed
+            ? latestEvidence?.result?.error || "Last write failed. Open technical details if you need the exact error."
+            : resolvedGate.ok
+              ? "Ready to write into X."
+              : resolvedGate.message
       },
       {
-        id: "package",
-        label: "Saved records",
-        tone: packageReady ? "ready" : "idle",
-        detail: packageReady
-          ? "Copy or save the final records."
-          : "Needs an import record and a complete article review."
+        id: "next",
+        label: "Next step",
+        tone: liveResult.complete ? "ok" : hasImportEvidence ? "warn" : resolvedGate.ok ? "ready" : "idle",
+        detail: liveResult.complete
+          ? "Review is recorded. You can copy this summary or save the full record."
+          : hasImportEvidence
+            ? `${liveResult.checked}/${liveResult.total} article review checks recorded. Finish reviewing in X.`
+            : resolvedGate.ok
+              ? "Click Write article when the target article is correct."
+              : "Fix the current blocker, then run Check article again."
       }
     ];
     return {
       extensionPath: EXTENSION_PATH,
-      loadedUnpacked: loaded,
-      complete: items.every((item) => item.tone === "ok" || item.tone === "ready"),
+      loadedUnpacked: hasChromeApi(),
+      complete: importSucceeded && liveResult.complete,
       items
     };
   }
@@ -7525,9 +7763,9 @@ console.log("示例代码块");
     const proof = buildProofDeckEvidence(checks, gate);
     const ready = proof.items.filter((item) => item.tone === "ok" || item.tone === "ready").length;
     els.proofDeckMeta.textContent = proof.complete
-      ? "Final records are ready to export."
-      : `${ready}/${proof.items.length} record items ready.`;
-    els.extensionPath.textContent = proof.extensionPath;
+      ? "Article review is recorded. Keep this summary or save the full record."
+      : `${ready}/${proof.items.length} publish steps ready.`;
+    if (els.extensionPath) els.extensionPath.textContent = proof.extensionPath;
     for (const item of proof.items) {
       const row = els.proofDeckList.querySelector(`[data-proof="${item.id}"]`);
       if (!row) continue;
@@ -7709,15 +7947,31 @@ console.log("示例代码块");
     }
   }
 
+  function buildPublishRecordSummary() {
+    const proof = buildProofDeckEvidence();
+    const lines = [
+      "xPoster publish record",
+      `Captured: ${new Date().toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`,
+      ""
+    ];
+    for (const item of proof.items) {
+      lines.push(`${item.label}: ${item.detail}`);
+    }
+    if (latestEvidence?.targetContext?.url || latestPageStatus?.url) {
+      lines.push("", `X page: ${latestEvidence?.targetContext?.url || latestPageStatus.url}`);
+    }
+    return lines.join("\n");
+  }
+
   async function copyProofDeck() {
-    const text = JSON.stringify(buildProofDeckEvidence(), jsonSafeReplacer, 2);
+    const text = buildPublishRecordSummary();
     try {
       await navigator.clipboard.writeText(text);
-      log("Completion records copied.");
+      log("Publish summary copied.");
     } catch {
-      els.evidenceMeta.textContent = "Completion records generated";
+      els.evidenceMeta.textContent = "Publish summary generated";
       els.evidenceText.textContent = text;
-      log("Completion records are ready in the panel.");
+      log("Publish summary is ready in the panel.");
     }
   }
 
@@ -7761,6 +8015,7 @@ console.log("示例代码块");
         await chooseVault();
         break;
       case "import":
+        await primeSuccessAudio();
         await importDraft();
         break;
       case "liveResult":
@@ -7833,8 +8088,8 @@ console.log("示例代码块");
   });
 
   els.markdown.addEventListener("input", () => {
-    saveDraft();
-    analyzeDraft();
+    scheduleSaveDraft();
+    scheduleAnalyzeDraft();
     syncActiveQueueWithDraft();
     if (suppressNextTypedHistory) {
       suppressNextTypedHistory = false;
@@ -7847,12 +8102,16 @@ console.log("示例代码块");
     window.clearTimeout(draftInputHistoryTimer);
     window.setTimeout(() => {
       saveDraft();
-      analyzeDraft();
+      analyzeDraftNow();
       window.clearTimeout(draftInputHistoryTimer);
       rememberDraftHistory("paste", { forceNew: true });
       acknowledgeDraftInput();
     }, 0);
   });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushDraftSave();
+  });
+  window.addEventListener("pagehide", flushDraftSave);
   els.importDraft.addEventListener("click", runImportButtonAction);
   els.pageState?.addEventListener("click", async () => {
     if (els.pageState.dataset.pageAction === "openArticles") await openArticles();
@@ -7876,10 +8135,15 @@ console.log("示例代码块");
   els.copyExtensionPath.addEventListener("click", copyExtensionPath);
   els.copyProofDeck.addEventListener("click", copyProofDeck);
   els.resetLiveResult.addEventListener("click", resetLiveResultChecks);
-  els.clearRecordHistory?.addEventListener("click", clearRecordHistory);
+  els.clearRecordHistory?.addEventListener("click", toggleRecordClearConfirm);
+  els.cancelRecordClear?.addEventListener("click", closeRecordClearConfirm);
+  els.confirmRecordClear?.addEventListener("click", clearRecordHistory);
+  document.addEventListener("click", handleRecordClearDismiss, true);
+  document.addEventListener("keydown", handleRecordClearDismiss, true);
   els.recordSearchInput?.addEventListener("input", () => {
     recordSearchQuery = els.recordSearchInput.value || "";
-    renderRecordHistory();
+    closeRecordClearConfirm();
+    scheduleRecordHistoryRender();
   });
   els.recordHistory?.addEventListener("click", handleRecordHistoryClick);
   els.recordHistory?.addEventListener("dblclick", handleRecordHistoryDblClick);
@@ -7917,12 +8181,18 @@ console.log("示例代码块");
       setCover: els.importCoverOption?.checked !== false
     });
   });
+  els.articleExportOptions?.addEventListener("change", () => {
+    setArticleExportOptions({
+      ...articleExportOptions,
+      enabled: els.articleExportOption?.checked !== false
+    });
+  });
   els.successFeedbackOptions?.addEventListener("change", () => {
     setSuccessFeedbackOptions({
       confetti: els.confettiOption?.checked !== false,
       sound: els.successSoundOption?.checked !== false,
       soundStyle: els.successSoundStyle?.value || "soft",
-      volume: Number(els.successSoundVolume?.value || 55) / 100
+      volume: Number(els.successSoundVolume?.value || Math.round(SUCCESS_SOUND_DEFAULT_VOLUME * 100)) / 100
     });
   });
   els.successSoundStyle?.addEventListener("change", () => {
@@ -7934,7 +8204,7 @@ console.log("示例代码块");
   els.successSoundVolume?.addEventListener("input", () => {
     setSuccessFeedbackOptions({
       ...successFeedbackOptions,
-      volume: Number(els.successSoundVolume.value || 55) / 100
+      volume: Number(els.successSoundVolume.value || Math.round(SUCCESS_SOUND_DEFAULT_VOLUME * 100)) / 100
     });
   });
   els.testSuccessFeedback?.addEventListener("click", testSuccessFeedback);
@@ -7975,6 +8245,7 @@ console.log("示例代码块");
   restoreLiveResultChecks();
   restoreTheme();
   restoreImportOptions();
+  restoreArticleExportOptions();
   restoreSuccessFeedbackOptions();
   installSystemThemeSync();
   updateLiveProgress();

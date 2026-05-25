@@ -1,8 +1,17 @@
-const REMOTE_IMAGE_TIMEOUT_MS = 15000;
+const REMOTE_IMAGE_TIMEOUT_MS = 10000;
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
-const REMOTE_IMAGE_RETRY_DELAYS_MS = [0, 500, 1400, 3000, 6000, 10000];
-const REMOTE_IMAGE_CACHE_TTL_MS = 10 * 60 * 1000;
-const MAX_REMOTE_IMAGE_CACHE_BYTES = 96 * 1024 * 1024;
+const REMOTE_IMAGE_RETRY_DELAYS_MS = [0, 700, 1800];
+const REMOTE_IMAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_REMOTE_IMAGE_CACHE_BYTES = 32 * 1024 * 1024;
+const PRIVATE_IMAGE_HOST_RE = /^(localhost|.+\.localhost)$/i;
+const SUPPORTED_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/bmp",
+  "image/avif"
+]);
 
 const remoteImageCache = new Map();
 let remoteImageCacheBytes = 0;
@@ -102,23 +111,23 @@ async function openArticles() {
 }
 
 async function fetchImage(url) {
-  if (!url || typeof url !== "string") return { ok: false, error: "Invalid image URL" };
-  if (url.startsWith("data:")) return parseDataUri(url);
-  if (!/^https?:\/\//i.test(url)) return { ok: false, error: "Unsupported image scheme" };
-  return readRemoteImagePayload(url);
+  const valid = validateImageUrl(url);
+  if (!valid.ok) return valid;
+  if (valid.dataUri) return parseDataUri(url);
+  return readRemoteImagePayload(valid.url.href);
 }
 
 async function probeImage(url) {
-  if (!url || typeof url !== "string") return { ok: false, error: "Invalid image URL" };
-  if (url.startsWith("data:")) {
+  const valid = validateImageUrl(url);
+  if (!valid.ok) return valid;
+  if (valid.dataUri) {
     const parsed = parseDataUri(url);
     return parsed.ok
       ? { ok: true, mime: parsed.mime, bytes: parsed.bytes || 0, fileName: "image.png" }
       : parsed;
   }
-  if (!/^https?:\/\//i.test(url)) return { ok: false, error: "Unsupported image scheme" };
 
-  const payload = await readRemoteImagePayload(url);
+  const payload = await readRemoteImagePayload(valid.url.href);
   if (!payload.ok) return payload;
   return {
     ok: true,
@@ -128,6 +137,67 @@ async function probeImage(url) {
     repairedSignedUrl: payload.repairedSignedUrl,
     cacheHit: payload.cacheHit
   };
+}
+
+function validateImageUrl(value) {
+  if (!value || typeof value !== "string") return { ok: false, error: "Invalid image URL" };
+  const raw = value.trim();
+  if (raw.startsWith("data:")) return { ok: true, dataUri: true };
+  let url = null;
+  try {
+    url = new URL(raw);
+  } catch {
+    return { ok: false, error: "Invalid image URL" };
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return { ok: false, error: "Unsupported image scheme" };
+  }
+  if (isPrivateImageHost(url.hostname)) {
+    return {
+      ok: false,
+      origin: url.origin,
+      error: "Private network image URLs are not downloaded by xPoster. Use a public image URL or a selected local image folder."
+    };
+  }
+  return { ok: true, url };
+}
+
+function isPrivateImageHost(hostname) {
+  const host = String(hostname || "").replace(/^\[|\]$/g, "").toLowerCase();
+  if (!host || PRIVATE_IMAGE_HOST_RE.test(host)) return true;
+  if (host === "::" || host === "::1" || host === "0:0:0:0:0:0:0:1") return true;
+  if (/^f[cd][0-9a-f]{2}:/i.test(host) || /^fe80:/i.test(host)) return true;
+  const parts = ipv4PartsFromHost(host);
+  return parts ? isPrivateIpv4Parts(parts) : false;
+}
+
+function ipv4PartsFromHost(host) {
+  const dotted = host.split(".").map((part) => Number(part));
+  if (dotted.length === 4 && dotted.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+    return dotted;
+  }
+  const mapped = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (!mapped) return null;
+  const high = Number.parseInt(mapped[1], 16);
+  const low = Number.parseInt(mapped[2], 16);
+  if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
+  return [high >> 8, high & 255, low >> 8, low & 255];
+}
+
+function isPrivateIpv4Parts(parts) {
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 192 && b === 0) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
+  );
 }
 
 function sleep(ms) {
@@ -213,11 +283,18 @@ async function fetchRemoteImagePayload(url) {
     const fetched = await fetchRemoteImageResponse(url, controller.signal);
     if (!fetched.ok) return fetched.error;
     const { response, finalUrl, repairedSignedUrl } = fetched;
+    const mime = (response.headers.get("content-type") || "").split(";")[0].trim() || guessMime(finalUrl || url);
+    if (!isSupportedImageMime(mime)) {
+      return { ok: false, error: `Unsupported image type: ${mime || "unknown"}` };
+    }
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (contentLength > MAX_IMAGE_BYTES) {
+      return { ok: false, error: `Image is too large (${contentLength} bytes)` };
+    }
     const buffer = await response.arrayBuffer();
     if (buffer.byteLength > MAX_IMAGE_BYTES) {
       return { ok: false, error: `Image is too large (${buffer.byteLength} bytes)` };
     }
-    const mime = (response.headers.get("content-type") || "").split(";")[0].trim() || guessMime(finalUrl || url);
     return {
       ok: true,
       base64: arrayBufferToBase64(buffer),
@@ -250,10 +327,18 @@ async function fetchRemoteImageResponse(url, signal) {
         credentials: "omit"
       });
       if (response.ok) {
+        const finalUrl = response.url || candidate.url;
+        try {
+          if (isPrivateImageHost(new URL(finalUrl).hostname)) {
+            lastReason = "Image redirect points to a private network address";
+            lastStatus = null;
+            break;
+          }
+        } catch {}
         return {
           ok: true,
           response,
-          finalUrl: candidate.url,
+          finalUrl,
           repairedSignedUrl: candidate.repairedSignedUrl
         };
       }
@@ -346,13 +431,33 @@ function parseDataUri(uri) {
   const match = String(uri || "").match(/^data:([^;,]+)?(;base64)?,([\s\S]*)$/);
   if (!match) return { ok: false, error: "Invalid data URI" };
   const mime = (match[1] || "image/png").toLowerCase();
-  if (match[2]) return { ok: true, mime, base64: match[3].replace(/\s+/g, ""), bytes: Math.floor(match[3].length * 0.75) };
+  if (match[2]) {
+    const base64 = match[3].replace(/\s+/g, "");
+    return imagePayloadFromBase64(mime, base64);
+  }
   try {
     const base64 = btoa(unescape(encodeURIComponent(decodeURIComponent(match[3]))));
-    return { ok: true, mime, base64, bytes: Math.floor(base64.length * 0.75) };
+    return imagePayloadFromBase64(mime, base64);
   } catch {
     return { ok: false, error: "Could not decode data URI" };
   }
+}
+
+function imagePayloadFromBase64(mime, base64) {
+  if (!isSupportedImageMime(mime)) return { ok: false, error: `Unsupported image type: ${mime || "unknown"}` };
+  const bytes = base64ByteLength(base64);
+  if (bytes > MAX_IMAGE_BYTES) return { ok: false, error: `Image is too large (${bytes} bytes)` };
+  return { ok: true, mime, base64, bytes };
+}
+
+function base64ByteLength(base64) {
+  const clean = String(base64 || "").replace(/\s+/g, "");
+  const padding = clean.endsWith("==") ? 2 : clean.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((clean.length * 3) / 4) - padding);
+}
+
+function isSupportedImageMime(mime) {
+  return SUPPORTED_IMAGE_MIME_TYPES.has(String(mime || "").split(";")[0].trim().toLowerCase());
 }
 
 function arrayBufferToBase64(buffer) {

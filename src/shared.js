@@ -20,6 +20,17 @@
   const LOCAL_DB = "xposter_local_assets";
   const LOCAL_STORE = "handles";
   const VAULT_KEY = "vault_root";
+  const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
+  const MAX_TABLE_IMAGE_PIXELS = 16 * 1000 * 1000;
+  const MAX_TABLE_IMAGE_CELLS = 1200;
+  const SUPPORTED_IMAGE_MIME_TYPES = new Set([
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/avif"
+  ]);
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -763,13 +774,85 @@
     );
   }
 
-  function parseDataUri(uri) {
+  function isSupportedImageMime(mime) {
+    return SUPPORTED_IMAGE_MIME_TYPES.has(String(mime || "").split(";")[0].trim().toLowerCase());
+  }
+
+  function isPrivateImageHost(hostname) {
+    const host = String(hostname || "").replace(/^\[|\]$/g, "").toLowerCase();
+    if (!host || /^(localhost|.+\.localhost)$/i.test(host)) return true;
+    if (host === "::" || host === "::1" || host === "0:0:0:0:0:0:0:1") return true;
+    if (/^f[cd][0-9a-f]{2}:/i.test(host) || /^fe80:/i.test(host)) return true;
+    const parts = ipv4PartsFromHost(host);
+    return parts ? isPrivateIpv4Parts(parts) : false;
+  }
+
+  function ipv4PartsFromHost(host) {
+    const dotted = host.split(".").map((part) => Number(part));
+    if (dotted.length === 4 && dotted.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+      return dotted;
+    }
+    const mapped = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+    if (!mapped) return null;
+    const high = Number.parseInt(mapped[1], 16);
+    const low = Number.parseInt(mapped[2], 16);
+    if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
+    return [high >> 8, high & 255, low >> 8, low & 255];
+  }
+
+  function isPrivateIpv4Parts(parts) {
+    const [a, b] = parts;
+    return (
+      a === 10 ||
+      a === 127 ||
+      a === 0 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 192 && b === 0) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
+  }
+
+  function isRemoteHttpImageSource(source) {
+    try {
+      const url = new URL(String(source || "").trim());
+      return (url.protocol === "https:" || url.protocol === "http:") && !isPrivateImageHost(url.hostname);
+    } catch {
+      return false;
+    }
+  }
+
+  function base64ByteLength(base64) {
+    const clean = String(base64 || "").replace(/\s+/g, "");
+    const padding = clean.endsWith("==") ? 2 : clean.endsWith("=") ? 1 : 0;
+    return Math.max(0, Math.floor((clean.length * 3) / 4) - padding);
+  }
+
+  function validateImagePayload(mime, bytes, maxBytes = MAX_IMAGE_BYTES) {
+    if (!isSupportedImageMime(mime)) return { ok: false, error: `Unsupported image type: ${mime || "unknown"}` };
+    if (bytes > maxBytes) return { ok: false, error: `Image is too large (${bytes} bytes)` };
+    return { ok: true };
+  }
+
+  function parseDataUri(uri, options = {}) {
     const match = String(uri || "").match(/^data:([^;,]+)?(;base64)?,([\s\S]*)$/);
     if (!match) return { ok: false, error: "Invalid data URI" };
     const mime = (match[1] || "image/png").toLowerCase();
-    if (match[2]) return { ok: true, mime, base64: match[3].replace(/\s+/g, "") };
+    const maxBytes = Number.isFinite(options.maxBytes) ? options.maxBytes : MAX_IMAGE_BYTES;
+    if (match[2]) {
+      const base64 = match[3].replace(/\s+/g, "");
+      const bytes = base64ByteLength(base64);
+      const valid = validateImagePayload(mime, bytes, maxBytes);
+      return valid.ok ? { ok: true, mime, base64, bytes } : valid;
+    }
     try {
-      return { ok: true, mime, base64: btoa(unescape(encodeURIComponent(decodeURIComponent(match[3])))) };
+      const base64 = btoa(unescape(encodeURIComponent(decodeURIComponent(match[3]))));
+      const bytes = base64ByteLength(base64);
+      const valid = validateImagePayload(mime, bytes, maxBytes);
+      return valid.ok ? { ok: true, mime, base64, bytes } : valid;
     } catch {
       return { ok: false, error: "Could not decode data URI" };
     }
@@ -879,11 +962,14 @@
         directory = await directory.getDirectoryHandle(part, { create: false });
       }
       const file = await (await directory.getFileHandle(parts[parts.length - 1], { create: false })).getFile();
+      const mime = file.type || extensionMime(file.name);
+      const valid = validateImagePayload(mime, file.size || 0);
+      if (!valid.ok) return { ...valid, source };
       const buffer = await file.arrayBuffer();
       return {
         ok: true,
         base64: arrayBufferToBase64(buffer),
-        mime: file.type || extensionMime(file.name),
+        mime,
         fileName: file.name,
         bytes: buffer.byteLength,
         source
@@ -905,6 +991,10 @@
     const measurer = document.createElement("canvas").getContext("2d");
     measurer.font = font;
     const columnCount = table.headers.length;
+    const rowCount = table.rows.length + 1;
+    if (columnCount * rowCount > MAX_TABLE_IMAGE_CELLS) {
+      throw new Error("Table is too large to render as an image");
+    }
     const widths = Array.from({ length: columnCount }, (_, index) => {
       const values = [table.headers[index], ...table.rows.map((row) => row[index] || "")];
       const measured = Math.max(...values.map((value) => measurer.measureText(String(value)).width + paddingX * 2));
@@ -912,10 +1002,13 @@
     });
 
     const width = widths.reduce((sum, value) => sum + value, 0);
-    const height = rowHeight * (table.rows.length + 1);
+    const height = rowHeight * rowCount;
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(width * scale);
     canvas.height = Math.ceil(height * scale);
+    if (canvas.width * canvas.height > MAX_TABLE_IMAGE_PIXELS) {
+      throw new Error("Table image would be too large to render");
+    }
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     const ctx = canvas.getContext("2d");
@@ -984,6 +1077,9 @@
     isAbsoluteLocalImageSource,
     guessFileName,
     extensionMime,
+    isSupportedImageMime,
+    isPrivateImageHost,
+    isRemoteHttpImageSource,
     parseDataUri,
     arrayBufferToBase64,
     renderTableImage,
