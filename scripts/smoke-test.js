@@ -310,12 +310,20 @@ assert.ok(
 );
 assert.ok(
   sidepanelText.includes("const X_ARTICLE_MEDIA_SOFT_LIMIT = 25") &&
+    sidepanelText.includes("const X_ARTICLE_MEDIA_HEADROOM_THRESHOLD = 20") &&
     sidepanelText.includes("X_ARTICLE_MEDIA_LIMIT_WARNING") &&
+    sidepanelText.includes("X_ARTICLE_MEDIA_HEADROOM_NOTE") &&
+    sidepanelText.includes("X_ARTICLE_MEDIA_CAPACITY_NOTE") &&
     sidepanelText.includes("function mediaUploadEstimate") &&
     sidepanelText.includes("mediaLimitWarningText") &&
-    sidepanelText.includes("X Articles media note") &&
-    sidepanelText.includes("up to 25 image uploads"),
-  "draft preflight should warn before X rejects Article media beyond the verified 25-image Article limit"
+    sidepanelText.includes("mediaHeadroomText") &&
+    sidepanelText.includes("mediaCapacityText") &&
+    sidepanelText.includes("nearSoftLimit") &&
+    sidepanelText.includes("X Article media note") &&
+    sidepanelText.includes("Image plan: {count}/25") &&
+    sidepanelText.includes("Split the draft") &&
+    sidepanelText.includes("remove images"),
+  "draft preflight should show gentle media capacity before X rejects Article media beyond the verified 25-image Article limit"
 );
 assert.ok(
   sidepanelText.includes('options: importOptionsPayload()'),

@@ -174,8 +174,13 @@
   const MAX_DRAFT_QUEUE_ITEM_BYTES = 512 * 1024;
   const MAX_RECORD_MARKDOWN_CHARS = 120000;
   const X_ARTICLE_MEDIA_SOFT_LIMIT = 25;
+  const X_ARTICLE_MEDIA_HEADROOM_THRESHOLD = 20;
   const X_ARTICLE_MEDIA_LIMIT_WARNING =
-    "X Articles media note: xPoster has verified X Articles can accept up to 25 image uploads in one article. This draft has {count} media upload items; extra images may be rejected by X.";
+    "Image plan: {count}/25, above xPoster's verified X Article limit. Split the draft or remove images before writing to avoid a late X rejection.";
+  const X_ARTICLE_MEDIA_HEADROOM_NOTE =
+    "Image plan: {count}/25. You are close to the verified X Article limit; split the draft before adding many more images.";
+  const X_ARTICLE_MEDIA_CAPACITY_NOTE =
+    "Image plan: {count}/25.";
   const MARKDOWN_FILE_RE = /\.(md|markdown|mdown|mkd|txt)$/i;
   const MARKDOWN_FILE_ACCEPT = ".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain";
   const MARKDOWN_TRANSFER_MIME_RE = /^(text\/markdown|text\/plain|application\/octet-stream)$/i;
@@ -408,7 +413,9 @@ console.log("示例代码块");
       "Writing stopped by user.": "写入已停止。",
       Stopped: "已停止",
       "Stop request failed: active X tab did not respond": "停止请求失败：当前 X 标签页没有响应",
-      [X_ARTICLE_MEDIA_LIMIT_WARNING]: "X 文章媒体提醒：xPoster 实测 X 文章单篇最多可接收 25 个图片上传项。这篇草稿有 {count} 个媒体上传项；超出的图片可能会被 X 拒绝。",
+      [X_ARTICLE_MEDIA_LIMIT_WARNING]: "图片容量：{count}/25，已超过 xPoster 实测上限。建议先拆成多篇或减少图片，避免写到最后被 X 拒绝。",
+      [X_ARTICLE_MEDIA_HEADROOM_NOTE]: "图片容量：{count}/25。已经接近 X 文章实测上限，继续加图前建议先考虑拆篇。",
+      [X_ARTICLE_MEDIA_CAPACITY_NOTE]: "图片容量：{count}/25。",
       "X Article media note": "X 文章媒体提醒",
       "Review before writing": "写入前确认",
       "Focus the Markdown editor below.": "光标已放到下面的 Markdown 编辑框。",
@@ -925,7 +932,9 @@ console.log("示例代码块");
       "Writing stopped by user.": "写入已停止。",
       Stopped: "已停止",
       "Stop request failed: active X tab did not respond": "停止请求失败：当前 X 标签页没有响应",
-      [X_ARTICLE_MEDIA_LIMIT_WARNING]: "X 文章媒体提醒：xPoster 实测 X 文章单篇最多可接收 25 个图片上传项。这篇草稿有 {count} 个媒体上传项；超出的图片可能会被 X 拒绝。",
+      [X_ARTICLE_MEDIA_LIMIT_WARNING]: "图片容量：{count}/25，已超过 xPoster 实测上限。建议先拆成多篇或减少图片，避免写到最后被 X 拒绝。",
+      [X_ARTICLE_MEDIA_HEADROOM_NOTE]: "图片容量：{count}/25。已经接近 X 文章实测上限，继续加图前建议先考虑拆篇。",
+      [X_ARTICLE_MEDIA_CAPACITY_NOTE]: "图片容量：{count}/25。",
       "X Article media note": "X 文章媒体提醒",
       "Review before writing": "写入前确认",
       "Focus the Markdown editor below.": "光标已放到下面的 Markdown 编辑框。",
@@ -1367,7 +1376,9 @@ console.log("示例代码块");
       "Writing stopped by user.": "写入已停止。",
       Stopped: "已停止",
       "Stop request failed: active X tab did not respond": "停止请求失败：当前 X 标签页没有响应",
-      [X_ARTICLE_MEDIA_LIMIT_WARNING]: "X 文章媒体提醒：xPoster 实测 X 文章单篇最多可接收 25 个图片上传项。这篇草稿有 {count} 个媒体上传项；超出的图片可能会被 X 拒绝。",
+      [X_ARTICLE_MEDIA_LIMIT_WARNING]: "图片容量：{count}/25，已超过 xPoster 实测上限。建议先拆成多篇或减少图片，避免写到最后被 X 拒绝。",
+      [X_ARTICLE_MEDIA_HEADROOM_NOTE]: "图片容量：{count}/25。已经接近 X 文章实测上限，继续加图前建议先考虑拆篇。",
+      [X_ARTICLE_MEDIA_CAPACITY_NOTE]: "图片容量：{count}/25。",
       "X Article media note": "X 文章媒体提醒",
       "Review before writing": "写入前确认",
       "Focus the Markdown editor below.": "光标已放到下面的 Markdown 编辑框。",
@@ -2711,6 +2722,7 @@ console.log("示例代码块");
         tables: 0,
         coverOnly: 0,
         total: 0,
+        nearSoftLimit: false,
         overSoftLimit: false
       };
     }
@@ -2728,14 +2740,27 @@ console.log("示例代码块");
       tables,
       coverOnly,
       total,
+      nearSoftLimit: total >= X_ARTICLE_MEDIA_HEADROOM_THRESHOLD && total <= X_ARTICLE_MEDIA_SOFT_LIMIT,
       overSoftLimit: total > X_ARTICLE_MEDIA_SOFT_LIMIT
     };
   }
 
-  function mediaLimitWarningText(estimate = mediaUploadEstimate()) {
+  function mediaNoteText(template, estimate = mediaUploadEstimate()) {
     const count = String(estimate.total || 0);
-    if (i18n) return i18n.t(X_ARTICLE_MEDIA_LIMIT_WARNING, { count });
-    return translateText(X_ARTICLE_MEDIA_LIMIT_WARNING).replace("{count}", count);
+    if (i18n) return i18n.t(template, { count });
+    return translateText(template).replace("{count}", count);
+  }
+
+  function mediaLimitWarningText(estimate = mediaUploadEstimate()) {
+    return mediaNoteText(X_ARTICLE_MEDIA_LIMIT_WARNING, estimate);
+  }
+
+  function mediaHeadroomText(estimate = mediaUploadEstimate()) {
+    return mediaNoteText(X_ARTICLE_MEDIA_HEADROOM_NOTE, estimate);
+  }
+
+  function mediaCapacityText(estimate = mediaUploadEstimate()) {
+    return mediaNoteText(X_ARTICLE_MEDIA_CAPACITY_NOTE, estimate);
   }
 
   function remoteImagePermissionPattern(origin) {
@@ -3685,13 +3710,13 @@ console.log("示例代码块");
     let operationIndex = 0;
     const rows = [];
 
-    if (mediaEstimate.overSoftLimit) {
+    if (mediaEstimate.overSoftLimit || mediaEstimate.nearSoftLimit) {
       rows.push({
         index: 0,
         indexLabel: "!",
         kind: "media-limit",
         label: "X Article media note",
-        detail: mediaLimitWarningText(mediaEstimate),
+        detail: mediaEstimate.overSoftLimit ? mediaLimitWarningText(mediaEstimate) : mediaHeadroomText(mediaEstimate),
         path: "Review before writing",
         tone: "warn"
       });
@@ -4079,6 +4104,8 @@ console.log("示例代码块");
     const mediaEstimate = mediaUploadEstimate(parsed);
     if (mediaEstimate.overSoftLimit) {
       notes.push({ tone: "warn", kind: "media-limit", text: mediaLimitWarningText(mediaEstimate) });
+    } else if (mediaEstimate.nearSoftLimit) {
+      notes.push({ tone: "warn", kind: "media-limit", text: mediaHeadroomText(mediaEstimate) });
     }
 
     if (uploadCount) {
@@ -4395,6 +4422,12 @@ console.log("示例代码块");
         text: mediaLimitWarningText(mediaEstimate)
       };
     }
+    if (mediaEstimate.total) {
+      return {
+        tone: mediaEstimate.nearSoftLimit ? "warn" : "ready",
+        text: mediaEstimate.nearSoftLimit ? mediaHeadroomText(mediaEstimate) : mediaCapacityText(mediaEstimate)
+      };
+    }
     return {
       tone: "ready",
       text: imageCount
@@ -4411,8 +4444,14 @@ console.log("示例代码块");
         text: mediaLimitWarningText(mediaEstimate)
       };
     }
+    if (mediaEstimate.nearSoftLimit) {
+      return {
+        tone: "warn",
+        text: mediaHeadroomText(mediaEstimate)
+      };
+    }
     if (remoteImageProbeStatus.state === "checking") {
-      return { tone: "ready", text: `Web images: ${remoteCount}` };
+      return { tone: "ready", text: mediaEstimate.total ? mediaCapacityText(mediaEstimate) : `Web images: ${remoteCount}` };
     }
     if (remoteImageProbeStatus.state === "checked" && remoteImageProbeStatus.fail) {
       return {
@@ -4421,9 +4460,9 @@ console.log("示例代码块");
       };
     }
     if (remoteImageProbeStatus.state === "checked") {
-      return { tone: "ready", text: `Web images: ${remoteCount} ready` };
+      return { tone: "ready", text: mediaEstimate.total ? mediaCapacityText(mediaEstimate) : `Web images: ${remoteCount} ready` };
     }
-    return { tone: "ready", text: `Web images: ${remoteCount}` };
+    return { tone: "ready", text: mediaEstimate.total ? mediaCapacityText(mediaEstimate) : `Web images: ${remoteCount}` };
   }
 
   function updateNextAction(checks = null, gate = null) {
