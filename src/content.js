@@ -45,6 +45,7 @@
     "Could not export Markdown": "无法导出 Markdown",
     "Copy Markdown": "复制 Markdown",
     "Download Markdown": "下载 Markdown",
+    "MD": "MD",
     "Markdown export action": "Markdown 导出操作",
     "Drop Markdown files to add drafts to the side panel.": "拖入 Markdown 文件，将草稿加入侧边栏。",
     "Drop a Markdown file or Markdown text to open it in the side panel.": "拖入 Markdown 文件或 Markdown 文本，在侧边栏打开。",
@@ -1771,7 +1772,7 @@
     const main = root.querySelector(".__xposter_article_export_main");
     const title = articleExportLabel(mode);
     if (main) {
-      main.textContent = title;
+      main.textContent = translateContentText("MD");
       main.title = title;
       main.setAttribute("aria-label", title);
     }
@@ -2122,17 +2123,17 @@
     style.textContent = `
       #${ARTICLE_EXPORT_ID} {
         position: absolute;
-        right: 16px;
-        bottom: 14px;
+        right: 8px;
+        bottom: 8px;
         z-index: 20;
         display: inline-flex;
         align-items: center;
-        border: 1px solid rgba(83, 100, 113, 0.22);
+        border: 1px solid rgba(83, 100, 113, 0.12);
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.86);
+        background: rgba(255, 255, 255, 0.62);
         color: #0f1419;
-        box-shadow: 0 10px 28px rgba(15, 20, 25, 0.10);
-        opacity: 0.42;
+        box-shadow: 0 4px 12px rgba(15, 20, 25, 0.06);
+        opacity: 0.22;
         transform: translateZ(0);
         transform-origin: 100% 100%;
         transition:
@@ -2141,9 +2142,9 @@
           background 160ms cubic-bezier(0.25, 1, 0.5, 1),
           box-shadow 180ms cubic-bezier(0.25, 1, 0.5, 1),
           transform 160ms cubic-bezier(0.25, 1, 0.5, 1);
-        font: 12px/1.2 ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+        font: 10.5px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
         letter-spacing: 0;
-        backdrop-filter: blur(10px);
+        backdrop-filter: blur(8px);
       }
       #${ARTICLE_EXPORT_ID}[data-motion="entered"] {
         animation: __xposter_article_export_in 260ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -2153,9 +2154,9 @@
       }
       #${ARTICLE_EXPORT_ID}:hover,
       #${ARTICLE_EXPORT_ID}:focus-within {
-        opacity: 1;
+        opacity: 0.92;
         border-color: rgba(83, 100, 113, 0.38);
-        box-shadow: 0 12px 30px rgba(15, 20, 25, 0.14);
+        box-shadow: 0 9px 22px rgba(15, 20, 25, 0.11);
         transform: translate3d(0, -1px, 0);
       }
       #${ARTICLE_EXPORT_ID}[data-feedback="done"],
@@ -2183,16 +2184,18 @@
         transform: translateY(1px) scale(0.985);
       }
       #${ARTICLE_EXPORT_ID} .__xposter_article_export_main {
-        min-height: 32px;
-        padding: 0 10px 0 12px;
-        font-weight: 650;
+        width: 32px;
+        min-height: 26px;
+        padding: 0;
+        font-weight: 720;
       }
       #${ARTICLE_EXPORT_ID} .__xposter_article_export_toggle {
-        width: 30px;
-        min-height: 32px;
+        width: 22px;
+        min-height: 26px;
         border-left: 1px solid rgba(83, 100, 113, 0.18);
         border-radius: 0 999px 999px 0;
         transform-origin: 50% 50%;
+        font-size: 10px;
       }
       #${ARTICLE_EXPORT_ID} .__xposter_article_export_toggle[aria-expanded="true"] {
         transform: rotate(180deg);
@@ -2239,7 +2242,7 @@
           transform: translate3d(0, 5px, 0) scale(0.985);
         }
         to {
-          opacity: 0.42;
+          opacity: 0.22;
           transform: translate3d(0, 0, 0) scale(1);
         }
       }
@@ -2266,10 +2269,10 @@
       }
       @media (prefers-color-scheme: dark) {
         #${ARTICLE_EXPORT_ID} {
-          background: rgba(22, 24, 28, 0.88);
-          border-color: rgba(231, 233, 234, 0.18);
+          background: rgba(22, 24, 28, 0.62);
+          border-color: rgba(231, 233, 234, 0.12);
           color: #e7e9ea;
-          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
         }
         #${ARTICLE_EXPORT_ID} .__xposter_article_export_toggle {
           border-left-color: rgba(231, 233, 234, 0.16);

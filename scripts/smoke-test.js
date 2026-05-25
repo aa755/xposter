@@ -236,6 +236,10 @@ assert.ok(
     contentScriptText.includes('link.download = fileName || articleFileName("")') &&
     contentScriptText.includes('await setArticleExportMode(button.dataset.exportMode)') &&
     contentScriptText.includes("signalArticleExportFeedback(root, \"done\")") &&
+    contentScriptText.includes('main.textContent = translateContentText("MD")') &&
+    contentScriptText.includes('main.title = title') &&
+    contentScriptText.includes("width: 32px") &&
+    contentScriptText.includes("opacity: 0.22") &&
     contentScriptText.includes('const LANGUAGE_STORAGE_KEY = "xposter_language"') &&
     contentScriptText.includes("function restoreContentLanguage") &&
     contentScriptText.includes("function translateContentText") &&
