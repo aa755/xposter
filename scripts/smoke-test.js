@@ -20,6 +20,12 @@ assert.equal(manifest.manifest_version, 3, "manifest must be MV3");
 assert.equal(manifest.default_locale, "en", "manifest must declare a default locale");
 assert.equal(manifestMessage(manifest.name), "xPoster", "manifest name must resolve to xPoster");
 assert.equal(pkg.version.replace(/\.0$/, ""), manifest.version, "package and manifest versions must match");
+for (const locale of ["zh_TW", "ja", "fr", "ru", "de", "es", "pt_BR", "ko"]) {
+  assert.ok(
+    fs.existsSync(path.join(root, "_locales", locale, "messages.json")),
+    `${locale} Chrome locale messages should be present`
+  );
+}
 assert.ok(!manifest.host_permissions, "remote image hosts must not be granted at install time");
 assert.deepEqual(
   manifest.optional_host_permissions,
@@ -135,6 +141,7 @@ vm.runInNewContext(
    }));
    const CONTENT_EN_TEXT = new Map(Array.from(CONTENT_ZH_TEXT.entries()).map(([en, zh]) => [zh, en]));
    ${contentScriptText.slice(statusHelperStart, statusHelperEnd)}
+   this.state = state;
    this.statusHelpers = { statusThemeFromPage, statusProgressForText, translateContentText, articleExportLabel };`,
   statusSandbox
 );
@@ -179,6 +186,14 @@ assert.equal(shared.parseDataUri(`data:image/png;base64,${"A".repeat(24 * 1024 *
 assert.ok(
   contentScriptText.includes('showStatus(formatCompletionMessage(summary), "done", 7000)'),
   "successful Markdown writes should finish with a done status even when images stay as links"
+);
+assert.ok(
+  contentScriptText.includes('"Local image folder": "本地图片文件夹"') &&
+    contentScriptText.includes('"Choose folder": "选择文件夹"') &&
+    contentScriptText.includes("[/^(\\d+) local image\\(s\\) need a root folder\\.$/, \"$1 张本地图片需要选择根文件夹。\"]") &&
+    contentScriptText.includes("const title = translateContentText(\"Local image folder\")") &&
+    contentScriptText.includes("const chooseLabel = translateContentText(\"Choose folder\")"),
+  "X-page local image folder prompt should not leak English in Chinese mode"
 );
 assert.ok(
   contentScriptText.includes("safeRuntimeSendMessage") &&
@@ -296,6 +311,12 @@ assert.equal(
 assert.equal(statusSandbox.statusHelpers.translateContentText("Preparing Markdown..."), "正在准备 Markdown...", "X page status details should follow the selected language");
 assert.equal(statusSandbox.statusHelpers.translateContentText("Writing article"), "正在写入文章", "X page status titles should be localized");
 assert.equal(statusSandbox.statusHelpers.articleExportLabel("copy"), "复制 Markdown", "X article export controls should localize action labels");
+statusSandbox.state.language = "ja";
+assert.equal(
+  statusSandbox.statusHelpers.translateContentText("Preparing Markdown..."),
+  "Preparing Markdown...",
+  "partially supported languages should fall back to English instead of mixing Chinese"
+);
 assert.ok(
   mainWorldText.includes("uploadFilesToEditor"),
   "main-world bridge should hand dropped image files to X's own uploader"
@@ -466,6 +487,19 @@ assert.ok(
     sidepanelHtml.includes('id="extensionPath" hidden') &&
     !sidepanelHtml.includes("<h2>Saved result checklist</h2>"),
   "saved results should read as a user-facing publish record, with technical details hidden by default"
+);
+assert.ok(
+    sidepanelHtml.includes('<option value="auto">Automatic</option>') &&
+    sidepanelHtml.includes('<option value="zh-TW">繁體中文</option>') &&
+    sidepanelHtml.includes('<option value="ja">日本語</option>') &&
+    sidepanelHtml.includes('<option value="fr">Français</option>') &&
+    sidepanelHtml.includes('<option value="ru">Русский</option>') &&
+    sidepanelText.includes("function populateLanguageSelect") &&
+    sidepanelText.includes("i18n.languageOptions()") &&
+    sidepanelText.includes('setLocalizedText(els.runPreflight, "Checking...")') &&
+    sidepanelText.includes('setLocalizedText(els.evidenceMeta, "No technical record saved yet.")') &&
+    sidepanelText.includes("localizeInterpolated(\"Local image folder setup failed: {error}\""),
+  "side panel language selection should support auto and global languages while keeping dynamic status text localized"
 );
 assert.ok(
   sidepanelText.includes("function buildPublishRecordSummary") &&

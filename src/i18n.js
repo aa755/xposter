@@ -1,9 +1,43 @@
 (() => {
   const STORAGE_LANGUAGE = "xposter_language";
-  const SUPPORTED_LANGUAGES = new Set(["en", "zh"]);
-  const messages = { en: {}, zh: {} };
-  const reverse = { en: new Map(), zh: new Map() };
+  const AUTO_LANGUAGE = "auto";
+  const LANGUAGE_OPTIONS = [
+    { code: AUTO_LANGUAGE, nativeName: "Automatic", htmlLang: "en" },
+    { code: "en", nativeName: "English", htmlLang: "en" },
+    { code: "zh", nativeName: "中文", htmlLang: "zh-CN" },
+    { code: "zh-TW", nativeName: "繁體中文", htmlLang: "zh-TW" },
+    { code: "ja", nativeName: "日本語", htmlLang: "ja" },
+    { code: "fr", nativeName: "Français", htmlLang: "fr" },
+    { code: "ru", nativeName: "Русский", htmlLang: "ru" },
+    { code: "es", nativeName: "Español", htmlLang: "es" },
+    { code: "de", nativeName: "Deutsch", htmlLang: "de" },
+    { code: "pt", nativeName: "Português", htmlLang: "pt" },
+    { code: "ko", nativeName: "한국어", htmlLang: "ko" }
+  ];
+  const LANGUAGE_ALIASES = new Map([
+    ["zh-cn", "zh"],
+    ["zh-hans", "zh"],
+    ["zh-sg", "zh"],
+    ["zh-tw", "zh-TW"],
+    ["zh-hant", "zh-TW"],
+    ["zh-hk", "zh-TW"],
+    ["ja-jp", "ja"],
+    ["fr-fr", "fr"],
+    ["fr-ca", "fr"],
+    ["ru-ru", "ru"],
+    ["es-es", "es"],
+    ["es-mx", "es"],
+    ["de-de", "de"],
+    ["pt-br", "pt"],
+    ["pt-pt", "pt"],
+    ["ko-kr", "ko"]
+  ]);
+  const SUPPORTED_LANGUAGES = new Set(LANGUAGE_OPTIONS.filter((item) => item.code !== AUTO_LANGUAGE).map((item) => item.code));
+  const LANGUAGE_META = new Map(LANGUAGE_OPTIONS.map((item) => [item.code, item]));
+  const messages = Object.fromEntries(Array.from(SUPPORTED_LANGUAGES, (language) => [language, {}]));
+  const reverse = Object.fromEntries(Array.from(SUPPORTED_LANGUAGES, (language) => [language, new Map()]));
   const missing = new Set();
+  let currentPreference = AUTO_LANGUAGE;
   let currentLanguage = preferredLanguage();
 
   function hasChromeStorage() {
@@ -11,32 +45,51 @@
   }
 
   function normalizeLanguage(language) {
-    const value = String(language || "").toLowerCase().replace("_", "-");
-    if (value.startsWith("zh")) return "zh";
-    if (value.startsWith("en")) return "en";
+    const value = String(language || "").replace("_", "-");
+    const lowerValue = value.toLowerCase();
+    if (lowerValue === AUTO_LANGUAGE || lowerValue === "system" || lowerValue === "browser") return preferredLanguage();
+    if (LANGUAGE_ALIASES.has(lowerValue)) return LANGUAGE_ALIASES.get(lowerValue);
+    const primary = lowerValue.split("-")[0];
+    if (SUPPORTED_LANGUAGES.has(primary)) return primary;
     return "en";
   }
 
+  function normalizeLanguagePreference(language) {
+    const value = String(language || "").replace("_", "-");
+    const lowerValue = value.toLowerCase();
+    if (lowerValue === AUTO_LANGUAGE || lowerValue === "system" || lowerValue === "browser") return AUTO_LANGUAGE;
+    return normalizeLanguage(value);
+  }
+
+  function resolvePreference(preference = currentPreference) {
+    return preference === AUTO_LANGUAGE ? preferredLanguage() : normalizeLanguage(preference);
+  }
+
   function preferredLanguage() {
-    return normalizeLanguage(navigator.language || "en");
+    const candidates = [navigator.language, ...(Array.isArray(navigator.languages) ? navigator.languages : [])];
+    for (const candidate of candidates) {
+      const value = String(candidate || "").toLowerCase().replace("_", "-");
+      const normalized = LANGUAGE_ALIASES.get(value) || value.split("-")[0];
+      if (SUPPORTED_LANGUAGES.has(normalized)) return normalized;
+    }
+    return "en";
   }
 
   function rebuildReverse() {
     for (const language of Object.keys(reverse)) {
       reverse[language].clear();
     }
-    for (const [key, value] of Object.entries(messages.en)) {
-      reverse.en.set(value, key);
-    }
-    for (const [key, value] of Object.entries(messages.zh)) {
-      reverse.zh.set(value, key);
+    for (const [language, table] of Object.entries(messages)) {
+      for (const [key, value] of Object.entries(table)) {
+        reverse[language].set(value, key);
+      }
     }
   }
 
   function registerMessages(nextMessages = {}) {
     for (const [language, table] of Object.entries(nextMessages)) {
       const normalized = normalizeLanguage(language);
-      if (!SUPPORTED_LANGUAGES.has(normalized) || !table || typeof table !== "object") continue;
+      if (!messages[normalized] || !table || typeof table !== "object") continue;
       Object.assign(messages[normalized], table);
     }
     rebuildReverse();
@@ -49,7 +102,11 @@
 
   function sourceKey(value) {
     const text = String(value ?? "");
-    return reverse.en.get(text) || reverse.zh.get(text) || text;
+    for (const language of [currentLanguage, "en", ...SUPPORTED_LANGUAGES]) {
+      const source = reverse[language]?.get(text);
+      if (source) return source;
+    }
+    return text;
   }
 
   function interpolate(template, values = {}) {
@@ -91,17 +148,21 @@
     root.querySelectorAll("[data-i18n-value]").forEach((element) => {
       element.value = t(element.dataset.i18nValue);
     });
-    document.documentElement.lang = currentLanguage === "zh" ? "zh-CN" : "en";
+    document.documentElement.lang = htmlLang();
     document.body.dataset.language = currentLanguage;
+    document.body.dataset.languagePreference = currentPreference;
   }
 
   async function setLanguage(language, { persist = true, render = true } = {}) {
-    currentLanguage = normalizeLanguage(language);
+    currentPreference = normalizeLanguagePreference(language);
+    currentLanguage = resolvePreference(currentPreference);
     if (render) renderDom();
     if (persist && hasChromeStorage()) {
-      await chrome.storage.local.set({ [STORAGE_LANGUAGE]: currentLanguage }).catch(() => {});
+      await chrome.storage.local.set({ [STORAGE_LANGUAGE]: currentPreference }).catch(() => {});
     }
-    window.dispatchEvent(new CustomEvent("xposter:i18n-language", { detail: { language: currentLanguage } }));
+    window.dispatchEvent(new CustomEvent("xposter:i18n-language", {
+      detail: { language: currentLanguage, preference: currentPreference }
+    }));
     return currentLanguage;
   }
 
@@ -112,11 +173,23 @@
         return setLanguage(stored[STORAGE_LANGUAGE], { persist: false, render });
       }
     }
-    return setLanguage(currentLanguage, { persist: false, render });
+    return setLanguage(currentPreference, { persist: false, render });
   }
 
   function language() {
     return currentLanguage;
+  }
+
+  function preference() {
+    return currentPreference;
+  }
+
+  function htmlLang(language = currentLanguage) {
+    return LANGUAGE_META.get(normalizeLanguage(language))?.htmlLang || "en";
+  }
+
+  function languageOptions() {
+    return LANGUAGE_OPTIONS.map((option) => ({ ...option }));
   }
 
   function missingKeys() {
@@ -125,9 +198,14 @@
 
   window.xPosterI18n = {
     STORAGE_LANGUAGE,
+    AUTO_LANGUAGE,
     language,
+    preference,
+    languageOptions,
     normalizeLanguage,
+    normalizeLanguagePreference,
     preferredLanguage,
+    htmlLang,
     registerMessages,
     registerLegacyMap,
     restoreLanguage,

@@ -353,6 +353,7 @@ console.log("示例代码块");
   const ZH_TEXT = new Map(
     Object.entries({
       "Markdown to X Articles": "Markdown 导入 X 文章",
+      Automatic: "自动",
       "Import Markdown to X Articles": "把 Markdown 草稿导入 X 文章",
       "Write Markdown to X Article": "把 Markdown 写入 X 文章",
       "Paste Markdown, then write it into the current or new X Article.": "粘贴 Markdown，然后写入当前或新建的 X 文章。",
@@ -413,6 +414,11 @@ console.log("示例代码块");
       "Writing stopped by user.": "写入已停止。",
       Stopped: "已停止",
       "Stop request failed: active X tab did not respond": "停止请求失败：当前 X 标签页没有响应",
+      "One Markdown file was too large for the queue. Load that draft by itself.": "单篇 Markdown 超过队列保存上限。请单独载入这篇草稿。",
+      "Queue was trimmed to fit browser storage.": "队列已自动收缩，以适应浏览器存储空间。",
+      "Could not save the Markdown queue in browser storage.": "无法把 Markdown 队列保存到浏览器存储。",
+      "Loaded dragged Markdown.": "已载入拖入的 Markdown。",
+      "{count} new draft(s) added. {total} total in queue.": "新增 {count} 篇草稿，队列现在有 {total} 篇。",
       [X_ARTICLE_MEDIA_LIMIT_WARNING]: "图片容量：{count}/25，已超过 xPoster 实测上限。建议先拆成多篇或减少图片，避免写到最后被 X 拒绝。",
       [X_ARTICLE_MEDIA_HEADROOM_NOTE]: "图片容量：{count}/25。已经接近 X 文章实测上限，继续加图前建议先考虑拆篇。",
       [X_ARTICLE_MEDIA_CAPACITY_NOTE]: "图片容量：{count}/25。",
@@ -899,6 +905,14 @@ console.log("示例代码块");
       "Open article": "打开文章",
       "No article URL yet": "还没有文章地址",
       "No page URL yet": "还没有网页地址",
+      "Article {id}": "文章 {id}",
+      "X page: {route}": "X 页面：{route}",
+      "Article editor open": "已打开文章编辑器",
+      "X Articles list": "X 文章列表",
+      "No X Article linked yet": "还没有关联 X 文章",
+      "No draft stats": "没有草稿统计",
+      "{count} image(s) uploaded": "{count} 张图片已上传",
+      "{uploaded} image(s) uploaded, {kept} kept as links": "{uploaded} 张图片已上传，{kept} 张保留为链接",
       Source: "来源",
       File: "文件",
       "Dropped file": "拖入文件",
@@ -971,17 +985,47 @@ console.log("示例代码块");
       Saved: "已保存",
       "Ready to write": "可写入",
       "Checked": "已检查",
+      Draft: "草稿",
       "Image check": "图片检查",
       Kind: "类型",
       Target: "目标",
       Images: "图片",
       Title: "标题",
+      Article: "文章",
       Cover: "封面",
       "Not run": "未运行",
       "Target not locked": "未锁定目标",
       "No image upload result": "没有图片上传结果",
       "Publish records cleared.": "记录已清空。",
       "Records cleared.": "记录已清空。",
+      "Checking...": "检查中...",
+      "Diagnostics unavailable": "诊断不可用",
+      "Publishing check started.": "已开始发布前检查。",
+      "Publishing check passed without blockers.": "发布前检查已通过，没有阻塞项。",
+      "Article confirmed: {target}.": "已确认文章：{target}。",
+      "the open X Article": "当前打开的 X 文章",
+      "{kind} record saved at {time}": "{kind}记录已保存，时间 {time}",
+      "Record copied.": "记录已复制。",
+      "Record is ready in the panel.": "记录已在面板中准备好。",
+      "Record package generated": "记录包已生成",
+      "Record package copied.": "记录包已复制。",
+      "Record package is ready in the panel.": "记录包已在面板中准备好。",
+      "Record package saved.": "记录包已保存。",
+      "Publish summary generated": "发布摘要已生成",
+      "Publish summary copied.": "发布摘要已复制。",
+      "Publish summary is ready in the panel.": "发布摘要已在面板中准备好。",
+      "Extension path copied.": "扩展路径已复制。",
+      "Review the article checklist.": "请检查文章清单。",
+      "Live verification runbook focused.": "已聚焦实时验证流程。",
+      "No next action available.": "暂无下一步操作。",
+      "No runbook action available.": "暂无可执行操作。",
+      "No technical record saved yet.": "还没有技术记录。",
+      "Run Check article or Write article to save a technical record.": "运行检查文章或写入文章后会保存技术记录。",
+      "No drafts": "还没有草稿",
+      "{count} found": "找到 {count} 条",
+      "{count} draft(s)": "{count} 条草稿",
+      "Today {time}": "今天 {time}",
+      "Yesterday {time}": "昨天 {time}",
       "Markdown draft": "Markdown 草稿",
       "Paste Markdown here, then save it to Pending.": "在这里粘贴 Markdown，然后保存到待发布草稿。",
       "Choose Markdown file": "选择 Markdown 文件",
@@ -1416,6 +1460,12 @@ console.log("示例代码块");
       "xPoster will ask when a Markdown draft uses local image paths.": "当 Markdown 草稿使用本地图片路径时，xPoster 会再提示选择文件夹。",
       "When a draft uses relative image paths, choose the folder that contains them.": "当草稿使用相对图片路径时，请选择包含这些路径的文件夹。",
       "No folder connected. xPoster will ask when a draft needs local images.": "尚未连接文件夹。草稿需要本地图片时，xPoster 会再提示。",
+      "Local image folder set: {name}.": "本地图片文件夹已设置：{name}。",
+      "Local image folder selection skipped.": "已跳过本地图片文件夹选择。",
+      "Local image folder cleared.": "本地图片文件夹已清除。",
+      "Local image folder setup failed: {error}": "本地图片文件夹设置失败：{error}",
+      "Could not clear local image folder: {error}": "无法清除本地图片文件夹：{error}",
+      "open an X page first": "请先打开 X 页面",
       "Local image folder needed": "需要本地图片文件夹",
       "Local image path blocked": "本地图片路径已阻止",
       "Choose the local image folder before writing.": "写入前请先选择本地图片文件夹。",
@@ -2486,6 +2536,8 @@ console.log("示例代码块");
       [/^Cover candidate: (.+)$/, "封面候选：$1"],
       [/^Import failed: (.+)$/, "导入失败：$1"],
       [/^Target locked: (.+)\.$/, "目标已锁定：$1。"],
+      [/^Article confirmed: article (.+)\.$/, "已确认文章：文章 $1。"],
+      [/^Article confirmed: the open X Article\.$/, "已确认文章：当前打开的 X 文章。"],
       [/^Publishing check found (\d+) blocker\(s\)\.$/, "发布前检查发现 $1 个阻塞项。"],
       [/^Selected: (.+)$/, "已选择：$1"],
       [/^(.+) - read access granted\.$/, "$1 - 已获得读取权限。"],
@@ -2598,8 +2650,9 @@ console.log("示例代码块");
     translateNodeText(root);
     translateAttributes(root);
     translateEvidencePlaceholder(root);
-    document.documentElement.lang = currentLanguage === "zh" ? "zh-CN" : "en";
+    document.documentElement.lang = i18n?.htmlLang?.(currentLanguage) || (currentLanguage === "zh" ? "zh-CN" : "en");
     document.body.dataset.language = currentLanguage;
+    document.body.dataset.languagePreference = i18n?.preference?.() || currentLanguage;
   }
 
   function localizeText(text) {
@@ -2609,12 +2662,47 @@ console.log("示例代码块");
     return translated === source ? translateText(source) : translated;
   }
 
+  function localizeInterpolated(key, values = {}) {
+    if (i18n) return i18n.t(key, values);
+    return translateText(String(key || "").replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? "")));
+  }
+
+  function populateLanguageSelect() {
+    if (!els.languageSelect || !i18n?.languageOptions) return;
+    els.languageSelect.innerHTML = i18n.languageOptions()
+      .map((option) => {
+        const label = option.code === "auto"
+          ? `${localizeText("Automatic")} (${option.nativeName})`
+          : option.nativeName;
+        return `<option value="${shared.escapeHtml(option.code)}">${shared.escapeHtml(label)}</option>`;
+      })
+      .join("");
+    els.languageSelect.value = i18n.preference?.() || currentLanguage;
+  }
+
   function setLocalizedText(node, source) {
     if (!node) return;
     delete node.dataset.i18n;
     node.__xposterSourceText = source;
     node.textContent = localizeText(source);
     if (node.firstChild?.nodeType === Node.TEXT_NODE) node.firstChild.__xposterSourceText = source;
+  }
+
+  function setLocalizedMessage(node, key, values = {}) {
+    if (!node) return;
+    delete node.dataset.i18n;
+    node.__xposterSourceText = key;
+    node.textContent = localizeInterpolated(key, values);
+    if (node.firstChild?.nodeType === Node.TEXT_NODE) node.firstChild.__xposterSourceText = key;
+  }
+
+  function setEvidenceRecordMeta(kind, capturedAt = new Date()) {
+    const date = capturedAt instanceof Date ? capturedAt : new Date(capturedAt);
+    const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setLocalizedMessage(els.evidenceMeta, "{kind} record saved at {time}", {
+      kind: localizeText(recordKindLabel(kind)),
+      time
+    });
   }
 
   function translateEvidencePlaceholder(root = document.body) {
@@ -2627,23 +2715,25 @@ console.log("示例代码块");
   }
 
   async function setLanguage(language, { persist = true } = {}) {
-    currentLanguage = i18n?.normalizeLanguage?.(language) || (language === "zh" ? "zh" : "en");
-    if (els.languageSelect) els.languageSelect.value = currentLanguage;
+    const preference = i18n?.normalizeLanguagePreference?.(language) || (language === "zh" ? "zh" : "en");
     if (i18n) {
-      await i18n.setLanguage(currentLanguage, { persist, render: false });
+      currentLanguage = await i18n.setLanguage(preference, { persist, render: false });
+    } else {
+      currentLanguage = preference === "zh" ? "zh" : "en";
     }
     translateDynamicDom();
+    populateLanguageSelect();
     updateDraftBrief();
     renderRecordHistory();
     if (persist && hasChromeApi()) {
-      chrome.storage.local.set({ [STORAGE_LANGUAGE]: currentLanguage });
+      chrome.storage.local.set({ [STORAGE_LANGUAGE]: i18n?.preference?.() || currentLanguage });
     }
   }
 
   async function restoreLanguage() {
     if (i18n) {
       currentLanguage = await i18n.restoreLanguage({ render: false });
-      await setLanguage(currentLanguage, { persist: false });
+      await setLanguage(i18n.preference?.() || currentLanguage, { persist: false });
       return;
     }
     if (hasChromeApi()) {
@@ -3135,9 +3225,7 @@ console.log("示例代码块");
   }
 
   function queueDraftTooLargeDetail() {
-    return currentLanguage === "zh"
-      ? "单篇 Markdown 超过队列保存上限。请单独载入这篇草稿。"
-      : "One Markdown file was too large for the queue. Load that draft by itself.";
+    return localizeText("One Markdown file was too large for the queue. Load that draft by itself.");
   }
 
   function utf8Size(value) {
@@ -3194,10 +3282,7 @@ console.log("示例代码块");
 
   function queuedDraftAddedDetail(count = 1) {
     const total = draftQueue.length;
-    if (currentLanguage === "zh") {
-      return `新增 ${count} 篇草稿，队列现在有 ${total} 篇。`;
-    }
-    return `${count} new draft${count === 1 ? "" : "s"} added. ${total} total in queue.`;
+    return localizeInterpolated("{count} new draft(s) added. {total} total in queue.", { count, total });
   }
 
   function showQueuedDraftAdded(count = 1) {
@@ -7009,13 +7094,15 @@ console.log("示例代码块");
   async function chooseVault() {
     const response = await sendToActiveTab({ type: "xposter:choose-vault" });
     if (response?.ok) {
-      log(`Local image folder set: ${response.name}.`);
+      log(localizeInterpolated("Local image folder set: {name}.", { name: response.name }));
       await refreshPageState();
       updatePreflight();
       return;
     }
     if (response?.skipped) log("Local image folder selection skipped.");
-    else log(`Local image folder setup failed: ${response?.error || "open an X page first"}`);
+    else log(localizeInterpolated("Local image folder setup failed: {error}", {
+      error: localizeText(response?.error || "open an X page first")
+    }));
   }
 
   async function clearVault() {
@@ -7025,7 +7112,9 @@ console.log("示例代码块");
       await refreshPageState();
       return;
     }
-    log(`Could not clear local image folder: ${response?.error || "open an X page first"}`);
+    log(localizeInterpolated("Could not clear local image folder: {error}", {
+      error: localizeText(response?.error || "open an X page first")
+    }));
   }
 
   function saveDraft() {
@@ -7164,14 +7253,20 @@ console.log("示例代码块");
 
   async function runPreflight() {
     els.runPreflight.disabled = true;
-    els.runPreflight.textContent = "Checking...";
+    setLocalizedText(els.runPreflight, "Checking...");
     log("Publishing check started.");
     await refreshPageState();
     const response = await sendToActiveTab({ type: "xposter:diagnostics" });
     latestDiagnostics = response?.ok ? response : { ok: false, error: response?.error || "Diagnostics unavailable" };
     await refreshRemoteImageAccessStatus(latestParsed);
     const locked = response?.ok ? lockTargetContext("preflight") : null;
-    if (locked) log(`Article confirmed: ${locked.context.articleId ? `article ${locked.context.articleId}` : "the open X Article"}.`);
+    if (locked) {
+      log(localizeInterpolated("Article confirmed: {target}.", {
+        target: locked.context.articleId
+          ? `${localizeText("Article")} ${locked.context.articleId}`
+          : localizeText("the open X Article")
+      }));
+    }
     updatePreflight();
     captureEvidence("preflight", {
       checks: buildPreflightChecks(),
@@ -7183,7 +7278,7 @@ console.log("示例代码块");
     if (failing.length) log(`Publishing check found ${failing.length} blocker(s).`);
     else log("Publishing check passed without blockers.");
     els.runPreflight.disabled = false;
-    els.runPreflight.textContent = "Check";
+    setLocalizedText(els.runPreflight, "Check");
   }
 
   function captureEvidence(kind, payload) {
@@ -7227,7 +7322,7 @@ console.log("示例代码块");
     };
     addRecordHistoryEntry(latestEvidence);
     if (kind === "import" || kind === "import-error") activeDraftFinalized = true;
-    els.evidenceMeta.textContent = `${kind} record saved at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    setEvidenceRecordMeta(kind);
     els.evidenceText.textContent = JSON.stringify(latestEvidence, jsonSafeReplacer, 2);
     els.copyEvidence.disabled = false;
     updateProgressiveSections();
@@ -7343,11 +7438,11 @@ console.log("示例代码块");
   }
 
   function formatRecordTarget(record) {
-    if (record.articleId) return currentLanguage === "zh" ? `文章 ${record.articleId}` : `Article ${record.articleId}`;
-    if (record.route === "editor") return currentLanguage === "zh" ? "已打开文章编辑器" : "Article editor open";
-    if (record.route === "articles") return currentLanguage === "zh" ? "X 文章列表" : "X Articles list";
-    if (record.route && record.route !== "none") return currentLanguage === "zh" ? `X 页面：${record.route}` : `X page: ${record.route}`;
-    return currentLanguage === "zh" ? "还没有关联 X 文章" : "No X Article linked yet";
+    if (record.articleId) return localizeInterpolated("Article {id}", { id: record.articleId });
+    if (record.route === "editor") return localizeText("Article editor open");
+    if (record.route === "articles") return localizeText("X Articles list");
+    if (record.route && record.route !== "none") return localizeInterpolated("X page: {route}", { route: record.route });
+    return localizeText("No X Article linked yet");
   }
 
   function formatRecordDraftStats(record) {
@@ -7357,21 +7452,20 @@ console.log("示例代码块");
     if (record.remoteImages?.count) {
       parts.push(formatCompactUnit(record.remoteImages.count, "remote image", "remote images", "张网页图片", { zhTenThousand: false }));
     }
-    return parts.join(", ") || (currentLanguage === "zh" ? "没有草稿统计" : "No draft stats");
+    return parts.join(", ") || localizeText("No draft stats");
   }
 
   function formatRecordImageText(record) {
     if (record.images.warnings) {
-      return currentLanguage === "zh"
-        ? `${record.images.ok} 张图片已上传，${record.images.warnings} 张保留为链接`
-        : `${record.images.ok} image(s) uploaded, ${record.images.warnings} kept as links`;
+      return localizeInterpolated("{uploaded} image(s) uploaded, {kept} kept as links", {
+        uploaded: record.images.ok,
+        kept: record.images.warnings
+      });
     }
     if (record.images.ok || record.images.fail) {
-      return currentLanguage === "zh"
-        ? `${record.images.ok} 张图片已上传`
-        : `${record.images.ok} image(s) uploaded`;
+      return localizeInterpolated("{count} image(s) uploaded", { count: record.images.ok });
     }
-    return currentLanguage === "zh" ? "还没有图片上传结果" : "No image upload result";
+    return localizeText("No image upload result");
   }
 
   function recordHasMarkdown(record) {
@@ -7433,8 +7527,8 @@ console.log("示例代码块");
     const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
     const dayDiff = Math.round((startOfToday - startOfDate) / 86400000);
     const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    if (dayDiff === 0) return currentLanguage === "zh" ? `今天 ${time}` : `Today ${time}`;
-    if (dayDiff === 1) return currentLanguage === "zh" ? `昨天 ${time}` : `Yesterday ${time}`;
+    if (dayDiff === 0) return localizeInterpolated("Today {time}", { time });
+    if (dayDiff === 1) return localizeInterpolated("Yesterday {time}", { time });
     return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   }
 
@@ -7563,8 +7657,8 @@ console.log("示例代码块");
     if (record.action) items.push(record.action);
     if (record.blocks) items.push(formatCompactUnit(record.blocks, "block", "blocks", "个块", { zhTenThousand: false }));
     if (record.remoteImages?.count) items.push(formatCompactUnit(record.remoteImages.count, "web image", "web images", "张网页图片", { zhTenThousand: false }));
-    if (record.articleId) items.push(currentLanguage === "zh" ? `文章 ${record.articleId}` : `Article ${record.articleId}`);
-    else if (record.url) items.push(currentLanguage === "zh" ? "已记录网页地址" : "Page URL saved");
+    if (record.articleId) items.push(localizeInterpolated("Article {id}", { id: record.articleId }));
+    else if (record.url) items.push(localizeText("Page URL saved"));
     return items.slice(0, 4);
   }
 
@@ -7616,7 +7710,7 @@ console.log("示例代码块");
       : [];
     latestEvidence = recordHistory[0]?.evidence || latestEvidence;
     if (latestEvidence) {
-      els.evidenceMeta.textContent = `${latestEvidence.kind} record saved at ${new Date(latestEvidence.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      setEvidenceRecordMeta(latestEvidence.kind, latestEvidence.capturedAt);
       els.evidenceText.textContent = JSON.stringify(latestEvidence, jsonSafeReplacer, 2);
       els.copyEvidence.disabled = false;
     }
@@ -7676,16 +7770,10 @@ console.log("示例代码块");
     if (els.recordHistory) els.recordHistory.hidden = false;
     if (els.recordHistoryMeta) {
       els.recordHistoryMeta.textContent = total
-        ? currentLanguage === "zh"
-          ? isSearching
-            ? `找到 ${visibleTotal} 条`
-            : `${total} 条草稿`
-          : isSearching
-            ? `${visibleTotal} found`
-            : `${total} draft(s)`
-        : currentLanguage === "zh"
-          ? "还没有草稿"
-          : "No drafts";
+        ? isSearching
+          ? localizeInterpolated("{count} found", { count: visibleTotal })
+          : localizeInterpolated("{count} draft(s)", { count: total })
+        : localizeText("No drafts");
     }
     if (els.recordSearchInput && els.recordSearchInput.value !== recordSearchQuery) {
       els.recordSearchInput.value = recordSearchQuery;
@@ -7693,9 +7781,7 @@ console.log("示例代码块");
     if (els.recordSearchSummary) {
       const searchSummary = total
       ? isSearching
-        ? currentLanguage === "zh"
-          ? `找到 ${visibleTotal} 条`
-          : `${visibleTotal} found`
+        ? localizeInterpolated("{count} found", { count: visibleTotal })
         : ""
       : "Paste or load Markdown to save the first recoverable draft.";
       els.recordSearchSummary.dataset.i18n = searchSummary;
@@ -7784,8 +7870,8 @@ console.log("示例代码块");
     activeRecordEditorId = null;
     window.clearTimeout(draftInputHistoryTimer);
     if (hasChromeApi()) await chrome.storage.local.remove(STORAGE_RECORD_HISTORY).catch(() => {});
-    els.evidenceMeta.textContent = "No technical record saved yet.";
-    els.evidenceText.textContent = "Run Check article or Write article to save a technical record.";
+    setLocalizedText(els.evidenceMeta, "No technical record saved yet.");
+    setLocalizedText(els.evidenceText, "Run Check article or Write article to save a technical record.");
     els.copyEvidence.disabled = true;
     renderRecordHistory();
     updateProgressiveSections();
@@ -8312,7 +8398,7 @@ console.log("示例代码块");
   async function copyEvidencePackage() {
     const pack = buildEvidencePackage("copy");
     const text = JSON.stringify(pack, jsonSafeReplacer, 2);
-    els.evidenceMeta.textContent = "Record package generated";
+    setLocalizedText(els.evidenceMeta, "Record package generated");
     els.evidenceText.textContent = text;
     try {
       await navigator.clipboard.writeText(text);
@@ -8353,7 +8439,7 @@ console.log("示例代码块");
       await navigator.clipboard.writeText(text);
       log("Publish summary copied.");
     } catch {
-      els.evidenceMeta.textContent = "Publish summary generated";
+      setLocalizedText(els.evidenceMeta, "Publish summary generated");
       els.evidenceText.textContent = text;
       log("Publish summary is ready in the panel.");
     }

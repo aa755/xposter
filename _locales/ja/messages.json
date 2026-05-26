@@ -1,0 +1,11 @@
+{
+  "extension_name": {
+    "message": "xPoster"
+  },
+  "extension_description": {
+    "message": "Markdown 下書きを X Articles に投稿するためのコンソール。"
+  },
+  "action_title": {
+    "message": "xPoster"
+  }
+}

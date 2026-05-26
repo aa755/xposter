@@ -31,13 +31,20 @@ function messageKeys(locale) {
   return new Set(Object.keys(readJson(`_locales/${locale}/messages.json`)));
 }
 
+const localeDirs = fs
+  .readdirSync(path.join(root, "_locales"), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort();
 const enLocaleKeys = messageKeys("en");
-const zhLocaleKeys = messageKeys("zh_CN");
-for (const key of enLocaleKeys) {
-  if (!zhLocaleKeys.has(key)) fail(`_locales/zh_CN/messages.json is missing "${key}"`);
-}
-for (const key of zhLocaleKeys) {
-  if (!enLocaleKeys.has(key)) fail(`_locales/en/messages.json is missing "${key}"`);
+for (const locale of localeDirs.filter((locale) => locale !== "en")) {
+  const localeKeys = messageKeys(locale);
+  for (const key of enLocaleKeys) {
+    if (!localeKeys.has(key)) fail(`_locales/${locale}/messages.json is missing "${key}"`);
+  }
+  for (const key of localeKeys) {
+    if (!enLocaleKeys.has(key)) fail(`_locales/en/messages.json is missing "${key}"`);
+  }
 }
 
 const manifest = readJson("manifest.json");
@@ -49,6 +56,7 @@ for (const [, key] of manifestText.matchAll(/__MSG_([A-Za-z0-9_]+)__/g)) {
 }
 
 const runtimeText = `${readText("sidepanel.js")}\n${readText("diagnostics.js")}`;
+const i18nText = readText("src/i18n.js");
 const runtimeKeys = new Set();
 for (const [, key] of runtimeText.matchAll(/"([^"\n]+)"\s*:\s*"[^"]*"/g)) {
   runtimeKeys.add(decodeJsString(key));
@@ -73,6 +81,15 @@ if (!/src="src\/i18n\.js"[\s\S]*src="sidepanel\.js"/.test(readText("sidepanel.ht
 }
 if (!/src="src\/i18n\.js"[\s\S]*src="diagnostics\.js"/.test(readText("diagnostics.html"))) {
   fail("diagnostics.html must load src/i18n.js before diagnostics.js");
+}
+
+for (const language of ["zh-TW", "ja", "fr", "ru"]) {
+  if (!i18nText.includes(`code: "${language}"`)) {
+    fail(`src/i18n.js must expose ${language} as a selectable language`);
+  }
+}
+if (!i18nText.includes("AUTO_LANGUAGE") || !i18nText.includes("normalizeLanguagePreference")) {
+  fail("src/i18n.js must support an automatic browser-language preference");
 }
 
 if (!process.exitCode) {

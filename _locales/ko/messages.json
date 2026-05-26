@@ -1,0 +1,11 @@
+{
+  "extension_name": {
+    "message": "xPoster"
+  },
+  "extension_description": {
+    "message": "Markdown 초안을 X Articles에 게시하기 위한 콘솔입니다."
+  },
+  "action_title": {
+    "message": "xPoster"
+  }
+}

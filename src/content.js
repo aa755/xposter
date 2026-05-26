@@ -103,6 +103,18 @@
     [X_ARTICLE_MEDIA_LIMIT_WARNING]: "图片容量：{count}/25，已超过 xPoster 实测上限。建议先拆成多篇或减少图片，避免写到最后被 X 拒绝。",
     [X_ARTICLE_MEDIA_HEADROOM_NOTE]: "图片容量：{count}/25。已经接近 X 文章实测上限，继续加图前建议先考虑拆篇。",
     "Local image folder cleared": "本地图片文件夹已清除",
+    "Local image folder": "本地图片文件夹",
+    "Choose the folder that contains your Markdown images.": "请选择包含 Markdown 图片的文件夹。",
+    "If your Markdown says": "如果 Markdown 里写的是",
+    "choose the folder that contains the": "请选择包含",
+    "directory.": "目录的文件夹。",
+    "Skip": "跳过",
+    "Choose folder": "选择文件夹",
+    "Read permission was not granted": "未获得读取权限",
+    "Local image folder was not selected": "未选择本地图片文件夹",
+    "Extension context unavailable": "扩展上下文不可用",
+    "Extension runtime messaging unavailable": "扩展消息通道不可用",
+    "Extension context invalidated. Reload the X Article tab after updating xPoster.": "扩展上下文已失效。更新 xPoster 后请重新加载 X 文章标签页。",
     "Could not set local image folder": "无法设置本地图片文件夹"
   }));
   const CONTENT_EN_TEXT = new Map(Array.from(CONTENT_ZH_TEXT.entries()).map(([en, zh]) => [zh, en]));
@@ -235,9 +247,15 @@
 
   function normalizeLanguage(language) {
     const value = String(language || "").toLowerCase().replace("_", "-");
+    if (value === "auto" || value === "system" || value === "browser") return preferredContentLanguage();
     if (value.startsWith("zh")) return "zh";
     if (value.startsWith("en")) return "en";
     return "en";
+  }
+
+  function preferredContentLanguage() {
+    const candidates = [navigator.language, ...(Array.isArray(navigator.languages) ? navigator.languages : [])];
+    return candidates.some((language) => String(language || "").toLowerCase().startsWith("zh")) ? "zh" : "en";
   }
 
   function contentSourceText(text) {
@@ -275,7 +293,9 @@
       [/^Article written(?: in (.+))?\. (.+) web image\(s\) stayed as Markdown links; (.+) table\(s\) kept as Markdown\.(?: Replace unreachable image URLs with public links, then write again if those images must upload\.)?$/, (_, elapsed, images, tables) => elapsed ? `文章已写入，用时 ${elapsed}。${images} 张网页图片保留为 Markdown 链接；${tables} 个表格保留为 Markdown。` : `文章已写入。${images} 张网页图片保留为 Markdown 链接；${tables} 个表格保留为 Markdown。`],
       [/^(\d+) local image\(s\) skipped: directory picker is unavailable$/, "$1 张本地图片已跳过：当前浏览器无法选择文件夹"],
       [/^(\d+) local image\(s\) need a local image folder\.\.\.$/, "$1 张本地图片需要选择本地图片文件夹..."],
+      [/^(\d+) local image\(s\) need a root folder\.$/, "$1 张本地图片需要选择根文件夹。"],
       [/^Local image folder set: (.+)$/, "本地图片文件夹已设置：$1"],
+      [/^Old X Article Markdown Paste residue detected: (.+)$/, "检测到旧版 X Article Markdown Paste 残留：$1"],
       [/^Adding (\d+) dropped image(?:s)?\.\.\.$/, "正在添加 $1 张拖入的图片..."],
       [/^Adding (\d+) image(?:s)?\.\.\.$/, "正在添加 $1 张图片..."],
       [/^(\d+) image\(s\) handed to X's uploader\.$/, "$1 张图片已交给 X 上传。"],
@@ -475,7 +495,7 @@
   }
 
   async function restoreContentLanguage() {
-    state.language = normalizeLanguage(navigator.language || "en");
+    state.language = preferredContentLanguage();
     if (!chrome.storage?.local) return;
     const stored = await chrome.storage.local.get(LANGUAGE_STORAGE_KEY).catch(() => ({}));
     state.language = normalizeLanguage(stored[LANGUAGE_STORAGE_KEY] || state.language);
@@ -485,7 +505,7 @@
   function installContentLanguageSync() {
     chrome.storage?.onChanged?.addListener((changes, areaName) => {
       if (areaName !== "local" || !changes[LANGUAGE_STORAGE_KEY]) return;
-      state.language = normalizeLanguage(changes[LANGUAGE_STORAGE_KEY].newValue || navigator.language || "en");
+      state.language = normalizeLanguage(changes[LANGUAGE_STORAGE_KEY].newValue || "auto");
       syncVisibleLocalizedContent();
     });
   }
@@ -1105,17 +1125,25 @@
         "box-shadow:0 22px 60px rgba(32,31,27,.28)",
         "padding:22px"
       ].join(";");
+      const title = translateContentText("Local image folder");
+      const detail = translateContentText(
+        count ? `${count} local image(s) need a root folder.` : "Choose the folder that contains your Markdown images."
+      );
+      const helpStart = translateContentText("If your Markdown says");
+      const helpMiddle = translateContentText("choose the folder that contains the");
+      const helpEnd = translateContentText("directory.");
+      const helpJoiner = state.language === "zh" ? "，" : ", ";
+      const skipLabel = translateContentText("Skip");
+      const chooseLabel = translateContentText("Choose folder");
       panel.innerHTML = `
-        <div style="font-size:17px;font-weight:760;margin-bottom:6px;">Local image folder</div>
-        <div style="color:#6b665e;margin-bottom:14px;">${shared.escapeHtml(
-          count ? `${count} local image(s) need a root folder.` : "Choose the folder that contains your Markdown images."
-        )}</div>
+        <div style="font-size:17px;font-weight:760;margin-bottom:6px;">${shared.escapeHtml(title)}</div>
+        <div style="color:#6b665e;margin-bottom:14px;">${shared.escapeHtml(detail)}</div>
         <div style="background:#f4f0e8;border:1px solid #d8d2c6;padding:10px 12px;color:#6b665e;font-size:12px;margin-bottom:16px;">
-          If your Markdown says <code>![](./img/cover.png)</code>, choose the folder that contains the <code>img</code> directory.
+          ${shared.escapeHtml(helpStart)} <code>![](./img/cover.png)</code>${helpJoiner}${shared.escapeHtml(helpMiddle)} <code>img</code> ${shared.escapeHtml(helpEnd)}
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;">
-          <button id="xposter-vault-skip" style="height:36px;padding:0 13px;border:1px solid #d8d2c6;background:#fbfaf7;color:#201f1b;font:inherit;font-weight:700;cursor:pointer;">Skip</button>
-          <button id="xposter-vault-pick" style="height:36px;padding:0 14px;border:0;background:#2f6f68;color:#fbfaf7;font:inherit;font-weight:760;cursor:pointer;">Choose folder</button>
+          <button id="xposter-vault-skip" style="height:36px;padding:0 13px;border:1px solid #d8d2c6;background:#fbfaf7;color:#201f1b;font:inherit;font-weight:700;cursor:pointer;">${shared.escapeHtml(skipLabel)}</button>
+          <button id="xposter-vault-pick" style="height:36px;padding:0 14px;border:0;background:#2f6f68;color:#fbfaf7;font:inherit;font-weight:760;cursor:pointer;">${shared.escapeHtml(chooseLabel)}</button>
         </div>
       `;
       overlay.appendChild(panel);

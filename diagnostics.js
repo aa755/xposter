@@ -89,6 +89,7 @@ const TEXT = {
     gateVaultOk: "Local image folder is ready.",
     gateVaultOptional: "Only needed when Markdown uses relative image paths.",
     gateVaultFix: "{name}: allow folder access in the side panel.",
+    selectedFolder: "Selected folder",
     errorPrefix: "Could not check this tab: {error}"
   },
   zh: {
@@ -159,6 +160,7 @@ const TEXT = {
     gateVaultOk: "本地图片文件夹可用。",
     gateVaultOptional: "只有 Markdown 使用相对图片路径时才需要。",
     gateVaultFix: "{name}：请在侧边栏允许文件夹访问。",
+    selectedFolder: "已选择的文件夹",
     errorPrefix: "无法检查当前页面：{error}"
   }
 };
@@ -193,7 +195,7 @@ function preferredLanguage() {
 }
 
 function language() {
-  return i18n?.language?.() || (currentLanguage === "zh" ? "zh" : "en");
+  return i18n?.language?.() || currentLanguage || "en";
 }
 
 function t(key, values = {}) {
@@ -208,9 +210,11 @@ function setText(element, key, values = {}) {
 }
 
 function setLanguage(nextLanguage) {
-  currentLanguage = i18n?.normalizeLanguage?.(nextLanguage) || (nextLanguage === "zh" ? "zh" : "en");
-  if (i18n && i18n.language() !== currentLanguage) {
-    i18n.setLanguage(currentLanguage, { persist: false, render: false });
+  if (i18n) {
+    i18n.setLanguage(nextLanguage, { persist: false, render: false });
+    currentLanguage = i18n.language();
+  } else {
+    currentLanguage = nextLanguage === "zh" ? "zh" : "en";
   }
   renderLanguage();
 }
@@ -235,7 +239,7 @@ async function restoreLanguage() {
 }
 
 function renderLanguage() {
-  document.documentElement.lang = language() === "zh" ? "zh-CN" : "en";
+  document.documentElement.lang = i18n?.htmlLang?.(language()) || (language() === "zh" ? "zh-CN" : "en");
   document.body.dataset.language = language();
   document.title = t("documentTitle");
   setText(document.querySelector("h1"), "heading");
@@ -305,7 +309,7 @@ function buildGate(result) {
   const vault = content?.vault;
   const targetContext = content?.targetContext;
   const editorLength = Number(targetContext?.editorTextLength || 0);
-  const selectedFolder = vault?.name || (language() === "zh" ? "已选择的文件夹" : "Selected folder");
+  const selectedFolder = vault?.name || t("selectedFolder");
 
   return [
     {
@@ -457,7 +461,7 @@ function bindEvents() {
   if (hasChromeStorage() && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName !== "local" || !changes[STORAGE_LANGUAGE]) return;
-      setLanguage(changes[STORAGE_LANGUAGE].newValue || preferredLanguage());
+      setLanguage(changes[STORAGE_LANGUAGE].newValue || "auto");
     });
   }
   window.addEventListener("xposter:i18n-language", (event) => {
