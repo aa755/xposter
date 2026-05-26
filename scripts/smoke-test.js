@@ -120,13 +120,18 @@ const backgroundText = fs.readFileSync(path.join(root, "src/background.js"), "ut
 const mainWorldText = fs.readFileSync(path.join(root, "src/main-world.js"), "utf8");
 const sidepanelText = fs.readFileSync(path.join(root, "sidepanel.js"), "utf8");
 const sidepanelHtml = fs.readFileSync(path.join(root, "sidepanel.html"), "utf8");
+const diagnosticsHtml = fs.readFileSync(path.join(root, "diagnostics.html"), "utf8");
 const sidepanelCss = fs.readFileSync(path.join(root, "sidepanel.css"), "utf8");
+const sharedText = fs.readFileSync(path.join(root, "src/shared.js"), "utf8");
+const diagnosticsHtmlIncludesSharedFirst = () =>
+  /src="src\/shared\.js"[\s\S]*src="src\/i18n\.js"[\s\S]*src="diagnostics\.js"/.test(diagnosticsHtml);
 const statusHelperStart = contentScriptText.indexOf("  function normalizeText");
 const statusHelperEnd = contentScriptText.indexOf("  function showStatus");
 const statusSandbox = {
   document: { body: {}, documentElement: {} },
   getComputedStyle: () => ({ backgroundColor: "rgb(18, 26, 34)" }),
-  window: { matchMedia: () => ({ matches: false }) }
+  window: { matchMedia: () => ({ matches: false }) },
+  shared: { toTraditionalChinese: shared.toTraditionalChinese }
 };
 
 assert.ok(statusHelperStart >= 0 && statusHelperEnd > statusHelperStart, "status helper functions should be present");
@@ -215,6 +220,14 @@ assert.ok(
     contentScriptText.includes("function updateDropHintSurface(hint, intent") &&
     contentScriptText.includes("--xposter-drop-surface-left") &&
     contentScriptText.includes("--xposter-drop-surface-width") &&
+    contentScriptText.includes('data-surface="page-dock"') &&
+    contentScriptText.includes("function pageDropDockSurfaceRect") &&
+    contentScriptText.includes("function articleBodyDropDockRect") &&
+    contentScriptText.includes("width: window.innerWidth") &&
+    contentScriptText.includes("height = Math.min(96") &&
+    contentScriptText.includes("function dropHintSurfaceKind") &&
+    contentScriptText.includes("--xposter-drop-progress") &&
+    contentScriptText.includes("Open X Article draft") &&
     contentScriptText.includes("xPoster page drop target") &&
     contentScriptText.includes("function setDropHintProcessing") &&
     contentScriptText.includes("updateVisibleDropHintCopy") &&
@@ -226,7 +239,7 @@ assert.ok(
     contentScriptText.includes("function hasImageDropPayload") &&
     contentScriptText.includes("function articleBodyHasFocus") &&
     contentScriptText.includes('event.dataTransfer.dropEffect = intent === "article-outside" ? "none" : "copy"'),
-  "X page drag feedback should use a stable editor-area mask with processing feedback"
+  "X page drag feedback should use a bottom full-width dock off-article and a short article-body dock with processing feedback"
 );
 assert.ok(
   contentScriptText.includes("if (!event?.altKey) return false;") &&
@@ -311,6 +324,9 @@ assert.equal(
 assert.equal(statusSandbox.statusHelpers.translateContentText("Preparing Markdown..."), "正在准备 Markdown...", "X page status details should follow the selected language");
 assert.equal(statusSandbox.statusHelpers.translateContentText("Writing article"), "正在写入文章", "X page status titles should be localized");
 assert.equal(statusSandbox.statusHelpers.articleExportLabel("copy"), "复制 Markdown", "X article export controls should localize action labels");
+statusSandbox.state.language = "zh-TW";
+assert.equal(statusSandbox.statusHelpers.translateContentText("Preparing Markdown..."), "正在準備 Markdown...", "X page status details should support Traditional Chinese");
+assert.equal(statusSandbox.statusHelpers.translateContentText("Queue Markdown drafts"), "加入 Markdown 草稿佇列", "X page drop hints should support Traditional Chinese");
 statusSandbox.state.language = "ja";
 assert.equal(
   statusSandbox.statusHelpers.translateContentText("Preparing Markdown..."),
@@ -496,6 +512,11 @@ assert.ok(
     sidepanelHtml.includes('<option value="ru">Русский</option>') &&
     sidepanelText.includes("function populateLanguageSelect") &&
     sidepanelText.includes("i18n.languageOptions()") &&
+    sidepanelText.includes('"zh-TW": Object.fromEntries') &&
+    sidepanelText.includes("function isChineseLanguage") &&
+    sidepanelText.includes("shared.toTraditionalChinese") &&
+    sharedText.includes("function toTraditionalChinese") &&
+    diagnosticsHtmlIncludesSharedFirst() &&
     sidepanelText.includes('setLocalizedText(els.runPreflight, "Checking...")') &&
     sidepanelText.includes('setLocalizedText(els.evidenceMeta, "No technical record saved yet.")') &&
     sidepanelText.includes("localizeInterpolated(\"Local image folder setup failed: {error}\""),
@@ -581,9 +602,10 @@ assert.ok(
     sidepanelHtml.includes('id="successSoundOption"') &&
     sidepanelHtml.includes('id="successSoundStyle"') &&
     sidepanelHtml.includes('id="successSoundVolume"') &&
+    sidepanelHtml.includes('id="successSoundVolumeValue"') &&
     sidepanelHtml.includes('value="75"') &&
-    sidepanelHtml.includes('id="testSuccessFeedback"'),
-  "settings should expose confetti, sound, sound style, volume, and feedback test controls"
+    !sidepanelHtml.includes('id="testSuccessFeedback"'),
+  "settings should expose confetti, sound, sound style, and volume without a feedback test control"
 );
 assert.ok(
   sidepanelText.includes("triggerSuccessFeedback(response.summary)") &&
@@ -612,7 +634,7 @@ assert.ok(
 assert.ok(
   sidepanelText.includes("window.confetti.create") &&
     sidepanelText.includes("useWorker: false") &&
-    sidepanelText.includes("testSuccessFeedback"),
+    !sidepanelText.includes("testSuccessFeedback"),
   "confetti should run from a packaged local canvas without blob workers"
 );
 assert.ok(
@@ -623,8 +645,9 @@ assert.ok(
     sidepanelText.includes("successSoundNotes") &&
     sidepanelText.includes("async function primeSuccessAudio()") &&
     sidepanelText.includes("await primeSuccessAudio();") &&
-    sidepanelText.includes("Sound blocked"),
-  "completion sound should use audible local Web Audio, unlock on user action, and report blocked playback"
+    sidepanelText.includes("successSoundVolumeValue") &&
+    !sidepanelText.includes("Sound blocked"),
+  "completion sound should use audible local Web Audio, unlock on write action, and keep settings free of test-only playback UI"
 );
 assert.ok(
   backgroundText.includes("REMOTE_IMAGE_RETRY_DELAYS_MS = [0, 700, 1800]") &&

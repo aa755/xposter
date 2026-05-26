@@ -74,7 +74,6 @@ Choose one:
 
 - Paste Markdown in the editor.
 - Click the file button and select a `.md` file.
-- Click **Example** to load the built-in demo draft.
 
 After the draft is loaded, xPoster previews the structure and shows warnings for anything it cannot handle yet.
 

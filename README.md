@@ -42,7 +42,7 @@ Use the source install only if you want to inspect or modify the extension yours
 
 1. Open or create an X Article at `https://x.com/compose/articles`.
 2. Open the xPoster side panel.
-3. Paste Markdown in the editor, choose a Markdown file, or click **Example**.
+3. Paste Markdown in the editor or choose a Markdown file.
    Single drafts stay in the editor so you can keep working directly.
 4. Check the preview and the issue list.
 5. Click **Check article** so xPoster can confirm the active X Article tab is reachable.

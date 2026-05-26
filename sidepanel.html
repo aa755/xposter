@@ -21,107 +21,6 @@
         </div>
       </header>
 
-      <section class="quick-steps-panel" aria-label="Write workflow" hidden>
-        <ol class="quick-steps" id="quickSteps">
-          <li data-step="draft" data-tone="idle">
-            <span class="step-number">1</span>
-            <div>
-              <strong>Input Markdown</strong>
-              <span>Add or drop your draft.</span>
-            </div>
-          </li>
-          <li data-step="import" data-tone="idle">
-            <span class="step-number">2</span>
-            <div>
-              <strong>Write to X draft</strong>
-              <span>Use the current X Article or create one.</span>
-            </div>
-          </li>
-        </ol>
-      </section>
-
-      <section class="next-action" id="nextAction" aria-label="Next action" data-tone="warn" hidden>
-        <div>
-          <span class="next-action-label">Next step</span>
-          <h2 id="nextActionTitle">Load a Markdown draft</h2>
-          <p id="nextActionDetail">Add a draft, choose a file, or load an example.</p>
-        </div>
-        <button class="secondary next-action-button" id="nextActionButton" type="button">Add Markdown</button>
-      </section>
-
-      <section class="assurance-strip" aria-label="Cost, privacy, and control" hidden>
-        <span>Free, no account or subscription</span>
-        <span>Draft stays in this browser</span>
-        <span>You review and publish in X</span>
-      </section>
-
-      <section class="workflow-rail" aria-label="Publishing workflow" hidden>
-        <ol id="workflowRail">
-          <li data-stage="draft" data-tone="idle">
-            <strong>Draft</strong>
-            <span>No Markdown loaded.</span>
-          </li>
-          <li data-stage="target" data-tone="idle">
-            <strong>X Article</strong>
-            <span>Open article.</span>
-          </li>
-          <li data-stage="bridge" data-tone="idle">
-              <strong>X editor</strong>
-            <span>Run a check.</span>
-          </li>
-          <li data-stage="media" data-tone="idle">
-            <strong>Media</strong>
-            <span>No uploads yet.</span>
-          </li>
-          <li data-stage="evidence" data-tone="idle">
-            <strong>Review</strong>
-            <span>No review yet.</span>
-          </li>
-        </ol>
-      </section>
-
-      <section class="live-gate" id="liveGate" aria-label="Import readiness" data-tone="warn" hidden>
-        <div class="live-gate-main">
-          <span class="live-gate-kicker">Current step</span>
-          <strong id="liveGatePrimary">Not ready yet</strong>
-          <span id="liveGateDetail">Load Markdown, then write it into X Articles.</span>
-        </div>
-        <div class="live-gate-score" aria-label="Readiness progress">
-          <span id="liveGateScore">0/9</span>
-          <div class="live-gate-meter">
-            <span id="liveGateMeterBar"></span>
-          </div>
-        </div>
-        <div class="live-gate-chips" id="liveGateChips" aria-label="Import readiness status">
-          <span data-tone="warn">Draft</span>
-          <span data-tone="warn">X Article</span>
-          <span data-tone="idle">Import</span>
-          <span data-tone="idle">Review</span>
-        </div>
-      </section>
-
-      <section class="command-dock" aria-label="Advanced command dock" data-tone="warn" hidden>
-        <div class="dock-status">
-          <span>Next</span>
-          <strong id="dockGate">Load draft</strong>
-          <em id="dockDetail">Paste or load Markdown before writing.</em>
-        </div>
-        <div class="dock-meter" aria-label="Readiness meter">
-          <span id="dockMeterBar"></span>
-        </div>
-        <div class="dock-actions">
-          <button class="dock-button" id="dockImport" type="button" disabled>Import</button>
-          <button class="dock-button" id="dockEvidence" type="button">Save result</button>
-        </div>
-        <div class="dock-jumps" id="dockJumps" aria-label="Jump to section">
-          <button class="jump-button" type="button" data-jump-target="draft" aria-current="true">Draft</button>
-          <button class="jump-button" type="button" data-jump-target="preview">Preview</button>
-          <button class="jump-button" type="button" data-jump-target="check">Check</button>
-          <button class="jump-button" type="button" data-jump-target="verify">Review</button>
-          <button class="jump-button" type="button" data-jump-target="evidence">Save</button>
-        </div>
-      </section>
-
       <nav class="tabs" aria-label="Workspace sections">
         <button class="tab active" type="button" data-tab="draft" data-i18n="Pending">Pending</button>
         <button class="tab" type="button" data-tab="records" data-i18n="Records">Records</button>
@@ -169,10 +68,6 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v3H4V4Zm0 5h10v3H4V9Zm0 5h8v3H4v-3Zm13.5-.7V9h2v4.3l1.6-1.6 1.4 1.4-3.5 3.5-3.5-3.5 1.4-1.4 1.6 1.6ZM17 18h5v2h-5v-2Z"/></svg>
               <span data-i18n="Write to X draft">Write to X draft</span>
             </button>
-          </div>
-          <div class="action-secondary-block" aria-label="Other actions" hidden>
-            <button class="secondary" id="openArticles" type="button" data-i18n="Open article">Open article</button>
-            <button class="secondary" id="dockCheck" type="button" data-i18n="Check article">Check article</button>
           </div>
           <p class="import-hint" id="importHint" data-tone="warn" data-i18n="Add Markdown first">Add Markdown first</p>
           <section class="inline-write-status" id="liveProgress" aria-label="Article writing progress" data-tone="idle" hidden>
@@ -239,7 +134,7 @@
               <span class="runbook-index">1</span>
               <div>
                 <strong>Add your draft</strong>
-              <span>Add Markdown, choose a file, or use the example to try the workflow.</span>
+              <span>Add Markdown or choose a file.</span>
             </div>
               <button class="secondary compact" type="button" data-runbook-action="addDraft">Add Markdown</button>
             </li>
@@ -389,7 +284,7 @@
             </li>
             <li data-audit="draft" data-tone="error">
               <strong>Markdown draft</strong>
-              <span>Load the example or use a real Markdown draft.</span>
+              <span>Use a real Markdown draft.</span>
             </li>
             <li data-audit="target" data-tone="error">
               <strong>X Article</strong>
@@ -566,7 +461,7 @@
                 <span class="issue-source">Draft</span>
               <div>
                 <strong>Add a Markdown draft</strong>
-              <span>Add a draft, choose a file, or load the example.</span>
+              <span>Add a draft or choose a file.</span>
             </div>
                 <button class="secondary compact" type="button" data-issue-action="addDraft">Add Markdown</button>
               </li>
@@ -963,8 +858,8 @@
               </span>
             </label>
           </fieldset>
-          <div class="setting-subcontrols">
-            <label>
+          <div class="setting-subcontrols setting-sound-controls">
+            <label class="setting-sound-style">
               <span data-i18n="Sound style">Sound style</span>
               <select id="successSoundStyle" aria-label="Sound style" data-i18n-aria-label="Sound style">
                 <option value="soft" data-i18n="Soft chime">Soft chime</option>
@@ -972,11 +867,13 @@
                 <option value="pop" data-i18n="Light pop">Light pop</option>
               </select>
             </label>
-            <label>
-              <span data-i18n="Volume">Volume</span>
+            <label class="setting-volume-control">
+              <span class="setting-control-head">
+                <span data-i18n="Volume">Volume</span>
+                <output id="successSoundVolumeValue" for="successSoundVolume">75%</output>
+              </span>
               <input id="successSoundVolume" type="range" min="20" max="100" step="5" value="75" aria-label="Volume" data-i18n-aria-label="Volume" />
             </label>
-            <button class="secondary compact" id="testSuccessFeedback" type="button" data-i18n="Test feedback">Test feedback</button>
           </div>
         </div>
         <div class="setting-row setting-row-stack">

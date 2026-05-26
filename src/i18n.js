@@ -34,6 +34,7 @@
   ]);
   const SUPPORTED_LANGUAGES = new Set(LANGUAGE_OPTIONS.filter((item) => item.code !== AUTO_LANGUAGE).map((item) => item.code));
   const LANGUAGE_META = new Map(LANGUAGE_OPTIONS.map((item) => [item.code, item]));
+  const LANGUAGE_FALLBACKS = new Map([["zh-TW", ["zh"]]]);
   const messages = Object.fromEntries(Array.from(SUPPORTED_LANGUAGES, (language) => [language, {}]));
   const reverse = Object.fromEntries(Array.from(SUPPORTED_LANGUAGES, (language) => [language, new Map()]));
   const missing = new Set();
@@ -102,11 +103,25 @@
 
   function sourceKey(value) {
     const text = String(value ?? "");
-    for (const language of [currentLanguage, "en", ...SUPPORTED_LANGUAGES]) {
+    for (const language of languageChain(currentLanguage, true)) {
       const source = reverse[language]?.get(text);
       if (source) return source;
     }
     return text;
+  }
+
+  function languageChain(language = currentLanguage, includeAll = false) {
+    const normalized = normalizeLanguage(language);
+    return Array.from(new Set([
+      normalized,
+      ...(LANGUAGE_FALLBACKS.get(normalized) || []),
+      "en",
+      ...(includeAll ? SUPPORTED_LANGUAGES : [])
+    ]));
+  }
+
+  function toTraditionalChinese(value) {
+    return window.xPosterShared?.toTraditionalChinese?.(value) || String(value ?? "");
   }
 
   function interpolate(template, values = {}) {
@@ -115,11 +130,20 @@
 
   function t(key, values = {}) {
     const normalizedKey = sourceKey(key);
-    const table = messages[currentLanguage] || messages.en;
-    const source = table[normalizedKey] ?? messages.en[normalizedKey];
+    let source = null;
+    let sourceLanguage = "";
+    for (const language of languageChain(currentLanguage)) {
+      if (messages[language]?.[normalizedKey] == null) continue;
+      source = messages[language][normalizedKey];
+      sourceLanguage = language;
+      break;
+    }
     if (source == null) {
       if (currentLanguage !== "en") missing.add(normalizedKey);
       return interpolate(normalizedKey, values);
+    }
+    if (currentLanguage === "zh-TW" && sourceLanguage === "zh") {
+      return interpolate(toTraditionalChinese(source), values);
     }
     return interpolate(source, values);
   }

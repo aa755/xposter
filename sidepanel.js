@@ -5,26 +5,6 @@
   const els = {
     markdown: document.getElementById("markdown"),
     pageState: document.getElementById("pageState"),
-    quickSteps: document.getElementById("quickSteps"),
-    workflowRail: document.getElementById("workflowRail"),
-    liveGate: document.getElementById("liveGate"),
-    liveGatePrimary: document.getElementById("liveGatePrimary"),
-    liveGateDetail: document.getElementById("liveGateDetail"),
-    liveGateScore: document.getElementById("liveGateScore"),
-    liveGateMeterBar: document.getElementById("liveGateMeterBar"),
-    liveGateChips: document.getElementById("liveGateChips"),
-    nextAction: document.getElementById("nextAction"),
-    nextActionTitle: document.getElementById("nextActionTitle"),
-    nextActionDetail: document.getElementById("nextActionDetail"),
-    nextActionButton: document.getElementById("nextActionButton"),
-    commandDock: document.querySelector(".command-dock"),
-    dockGate: document.getElementById("dockGate"),
-    dockDetail: document.getElementById("dockDetail"),
-    dockMeterBar: document.getElementById("dockMeterBar"),
-    dockCheck: document.getElementById("dockCheck"),
-    dockImport: document.getElementById("dockImport"),
-    dockEvidence: document.getElementById("dockEvidence"),
-    dockJumps: document.getElementById("dockJumps"),
     advancedDiagnostics: document.getElementById("advancedDiagnostics"),
     evidenceDetails: document.getElementById("evidenceDetails"),
     titleMetric: document.getElementById("titleMetric"),
@@ -64,7 +44,6 @@
     draftQueue: document.getElementById("draftQueue"),
     draftQueueMeta: document.getElementById("draftQueueMeta"),
     draftQueueList: document.getElementById("draftQueueList"),
-    addDraft: document.getElementById("addDraft"),
     clearRecordHistory: document.getElementById("clearRecordHistory"),
     recordClearConfirm: document.getElementById("recordClearConfirm"),
     cancelRecordClear: document.getElementById("cancelRecordClear"),
@@ -75,9 +54,7 @@
     importHint: document.getElementById("importHint"),
     draftBrief: document.getElementById("draftBrief"),
     draftRecognized: document.getElementById("draftRecognized"),
-    openArticles: document.getElementById("openArticles"),
     loadFile: document.getElementById("loadFile"),
-    loadSmoke: document.getElementById("loadSmoke"),
     pickVault: document.getElementById("pickVault"),
     clearVault: document.getElementById("clearVault"),
     clearVaultSettings: document.getElementById("clearVaultSettings"),
@@ -153,8 +130,7 @@
     successSoundOption: document.getElementById("successSoundOption"),
     successSoundStyle: document.getElementById("successSoundStyle"),
     successSoundVolume: document.getElementById("successSoundVolume"),
-    testSuccessFeedback: document.getElementById("testSuccessFeedback"),
-    extensionVersion: document.getElementById("extensionVersion"),
+    successSoundVolumeValue: document.getElementById("successSoundVolumeValue"),
     activityPanel: document.getElementById("activityPanel")
   };
 
@@ -224,92 +200,6 @@
   const CONTENT_VERSION_UNKNOWN = "unknown";
   const EXTENSION_PATH = "the folder you cloned or downloaded";
 
-  if (els.extensionVersion) els.extensionVersion.textContent = `v${EXTENSION_VERSION}`;
-  const LIVE_SMOKE_FIXTURE = `---
-title: xPoster live smoke test
-cover: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACqUlEQVR4nO3ZMXLUQBRF0dmHA7wDb4uMXXoBRN4JVRBAOXBiPFhC6n6/9Y+qbt6td2YS3W4ez8jn188fv3Ws9IabnvRL6lh6c6MXyvCaAyF9QYUQpC+lIIT0RRREkL6AggjSB1cQQfrACiNIH1ZBAOmDKoggfUCFEaQPpyCA9MEURpA+lABQCkD6QAojSB9GAAgAXR7A45eH+MU1GcDr6PdKv4TOxceHIN9QAFvGhwAAAAAA4HIA9owPAQAAAAAAAAVeSLcAaB4AzSsF4OX7c8sAaA4gCQGAYgHQPAAEQOf8AzQPgMbNHh+AIiWGLwkg+SK6BkDzAGgeAM0DoHkANA+A5gHQPACaB0DzAGgeAM0DoHmlAKS/yq32JQ+AQqWHBKBA6TEBAACAdOlBATA+AAAAYHwADL8cgPTL6BgAk3v69jV+BgACo98rfTYAQsNXgQBAgfGTCAAAAIAK46cQAAAAAAAAUGL8BAIAAAAAAAAAqAAg/WXvjK97ACwOYA+Ej8YaAWAkCgB2IvhsuLMAzPqHAGAjgDOGPTsAJiFIDz0SAQAb/gHSIwPg1z8MAQAL//oBGDg8AAEAI85xpPSwMxAAcAEER+4HAAAAAADAsgiO3g0AAABYFcEZ9wJgUQRn3QmABRGceR8AFkNw9l0AWAjBiHsAsAiCUXcAYAEEI88PQHEEo88+DMBeBOkRKyKYcW4AiiKYdWYACiKYed6hALYiSI9WCcHss97enhSC9FiVEMTGHw3gPYb0OBURJM4XAdCxasMDEMaQPgMAAkDvAEDQq7/GB6BXADTvQwAQ9Oju+AD06J8AILh2n44PwXXbPD4A12wXAAiu1e7xIbhO/z0+BOt3eHwI1u208UFYqyHDQ7BGw8cHoWZTh4ehRunNNz3pl3SFRu7zB/oxkFuyiUIVAAAAAElFTkSuQmCC
----
-
-# This heading should become body content only if title parsing fails
-
-This paragraph checks **bold**, *italic*, ~~strikethrough~~, inline \`code\`, and [a link](https://example.com).
-
-> This quote checks blockquote import.
-
-- First unordered item
-- Second unordered item
-
-1. First ordered item
-2. Second ordered item
-
-![cover pixel](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACqUlEQVR4nO3ZMXLUQBRF0dmHA7wDb4uMXXoBRN4JVRBAOXBiPFhC6n6/9Y+qbt6td2YS3W4ez8jn188fv3Ws9IabnvRL6lh6c6MXyvCaAyF9QYUQpC+lIIT0RRREkL6AggjSB1cQQfrACiNIH1ZBAOmDKoggfUCFEaQPpyCA9MEURpA+lABQCkD6QAojSB9GAAgAXR7A45eH+MU1GcDr6PdKv4TOxceHIN9QAFvGhwAAAAAA4HIA9owPAQAAAAAAAAVeSLcAaB4AzSsF4OX7c8sAaA4gCQGAYgHQPAAEQOf8AzQPgMbNHh+AIiWGLwkg+SK6BkDzAGgeAM0DoHkANA+A5gHQPACaB0DzAGgeAM0DoHmlAKS/yq32JQ+AQqWHBKBA6TEBAACAdOlBATA+AAAAYHwADL8cgPTL6BgAk3v69jV+BgACo98rfTYAQsNXgQBAgfGTCAAAAIAK46cQAAAAAAAAUGL8BAIAAAAAAAAAqAAg/WXvjK97ACwOYA+Ej8YaAWAkCgB2IvhsuLMAzPqHAGAjgDOGPTsAJiFIDz0SAQAb/gHSIwPg1z8MAQAL//oBGDg8AAEAI85xpPSwMxAAcAEER+4HAAAAAADAsgiO3g0AAABYFcEZ9wJgUQRn3QmABRGceR8AFkNw9l0AWAjBiHsAsAiCUXcAYAEEI88PQHEEo88+DMBeBOkRKyKYcW4AiiKYdWYACiKYed6hALYiSI9WCcHss97enhSC9FiVEMTGHw3gPYb0OBURJM4XAdCxasMDEMaQPgMAAkDvAEDQq7/GB6BXADTvQwAQ9Oju+AD06J8AILh2n44PwXXbPD4A12wXAAiu1e7xIbhO/z0+BOt3eHwI1u208UFYqyHDQ7BGw8cHoWZTh4ehRunNNz3pl3SFRu7zB/oxkFuyiUIVAAAAAElFTkSuQmCC)
-
-| Capability | Expected result |
-| :--- | :--- |
-| Markdown table | Rendered as an uploaded image |
-| Marker cleanup | No \`__XPOSTER_\` text remains |
-
-https://x.com/Interior/status/463440424141459456
-
-\`\`\`js
-console.log("xPoster live smoke");
-\`\`\`
-
----
-
-Final paragraph after the divider.`;
-const EXAMPLE_DRAFT = `---
-title: Example X Article
----
-
-# How I draft with Markdown
-
-I write the article first, then use xPoster to move it into X Articles.
-
-## What this draft includes
-
-- Headings
-- Lists
-- Links
-- Tables
-
-| Step | Result |
-| :--- | :--- |
-| Paste Markdown | xPoster previews the structure |
-| Open X Articles | xPoster checks the editor |
-| Import | The article is filled in X |
-
-https://x.com/Interior/status/463440424141459456
-
-\`\`\`js
-console.log("Example code block");
-\`\`\``;
-  const EXAMPLE_DRAFT_ZH = `---
-title: 示例 X 文章
----
-
-# 我如何用 Markdown 写长文
-
-我先在熟悉的编辑器里写完整篇文章，再用 xPoster 导入到 X Articles。
-
-## 这份草稿包含
-
-- 标题
-- 列表
-- 链接
-- 表格
-
-| 步骤 | 结果 |
-| :--- | :--- |
-| 粘贴 Markdown | xPoster 会先预览文章结构 |
-| 打开 X 文章 | xPoster 检查当前编辑器 |
-| 导入 | 内容会填入 X 文章草稿 |
-
-https://x.com/Interior/status/463440424141459456
-
-\`\`\`js
-console.log("示例代码块");
-\`\`\``;
   let latestParsed = null;
   let latestCounts = shared.segmentCounts([]);
   let latestPageStatus = null;
@@ -322,7 +212,6 @@ console.log("示例代码块");
   let activeRecordEditorId = null;
   let activeDraftEditor = null;
   let liveResultChecks = {};
-  let currentNextAction = null;
   let targetLock = null;
   let latestProgress = createLiveProgressState();
   let currentLanguage = preferredLanguage();
@@ -447,12 +336,12 @@ console.log("示例代码块");
       "Add your Markdown": "放入 Markdown",
       "Add your draft": "放入草稿",
       "Paste Markdown": "粘贴 Markdown",
-      "Add a draft, choose a .md file, or use Example to try the workflow first.": "粘贴 Markdown、选择 .md 文件，或用样例先试一遍流程。",
+      "Add a draft or choose a .md file.": "添加草稿或选择 .md 文件。",
       "Paste here or choose a .md file.": "在这里粘贴，或选择 .md 文件。",
       "Paste text or choose a Markdown file.": "粘贴文字或选择 Markdown 文件。",
       "Paste text or choose a .md file.": "粘贴文字或选择 .md 文件。",
       "Paste a draft or load a Markdown file.": "粘贴草稿或加载 Markdown 文件。",
-      "Paste a draft, choose a Markdown file, or load the example.": "粘贴草稿、选择 Markdown 文件，或加载样例。",
+      "Paste a draft or choose a Markdown file.": "粘贴草稿或选择 Markdown 文件。",
       "Choose .md file": "选择 .md 文件",
       "Step 1: paste Markdown, or choose a .md file.": "第一步：粘贴 Markdown，或选择 .md 文件。",
       "Recognized: nothing yet": "已识别：暂无内容",
@@ -664,19 +553,17 @@ console.log("示例代码块");
       "Load a Markdown draft": "加载 Markdown 草稿",
       "Add a Markdown draft": "放入 Markdown 草稿",
       "Choose file": "选择文件",
-      "Paste Markdown into the draft editor, choose a file, or load the smoke fixture.": "将 Markdown 粘贴到草稿编辑器、选择文件，或加载烟测草稿。",
-      "Paste Markdown into the draft box, choose a file, or load an example.": "粘贴 Markdown、选择文件，或加载样例。",
-      "Add a draft, choose a file, or load an example.": "粘贴 Markdown、选择文件，或加载样例。",
+      "Paste Markdown into the draft editor, or choose a file.": "将 Markdown 粘贴到草稿编辑器，或选择文件。",
+      "Paste Markdown into the draft box, or choose a file.": "粘贴 Markdown，或选择文件。",
+      "Add a draft or choose a file.": "添加草稿或选择文件。",
       "Paste a Markdown draft or choose a file. xPoster will preview it before anything is written to X.": "粘贴 Markdown 草稿或选择文件。xPoster 会先预览，不会立刻写入 X。",
       "Paste a draft or choose a .md file. xPoster previews it first and does not write to X yet.": "粘贴草稿或选择 .md 文件。xPoster 会先预览，此时不会写入 X。",
       "Paste your Markdown or choose a .md file. xPoster will preview the draft before touching X.": "粘贴 Markdown 或选择 .md 文件。xPoster 会先预览草稿，不会立刻操作 X。",
-      "Paste your Markdown in the box, or choose a .md file. Use Example only if you want to try the workflow first.": "把 Markdown 粘贴到草稿框，或选择 .md 文件。只想先试用流程时，再点样例。",
-      "Paste your Markdown in the box, choose a .md file, or use Example to try the workflow first.": "把 Markdown 粘贴到草稿框、选择 .md 文件，或用样例先试一遍流程。",
-      "Paste your Markdown in the draft box, choose a .md file, or use Example to try the workflow first.": "把 Markdown 粘贴到草稿框、选择 .md 文件，或用样例先试一遍流程。",
+      "Paste your Markdown in the box, or choose a .md file.": "把 Markdown 粘贴到草稿框，或选择 .md 文件。",
+      "Paste your Markdown in the draft box, or choose a .md file.": "把 Markdown 粘贴到草稿框，或选择 .md 文件。",
       "# Article title\n\nPaste your Markdown here. xPoster will preview text and images, then show the next step.": "# 文章标题\n\n把 Markdown 粘贴到这里。xPoster 会预览文字和图片，然后显示下一步。",
-      "Paste Markdown, choose a file, or load the example draft.": "粘贴 Markdown、选择文件，或加载样例草稿。",
-      "Load Smoke": "加载烟测",
-      "Load example": "加载样例",
+      "Paste Markdown or choose a file.": "粘贴 Markdown 或选择文件。",
+
       Gate: "状态",
       Status: "状态",
       Progress: "进度",
@@ -752,11 +639,6 @@ console.log("示例代码块");
       "Warm bell": "温和铃声",
       "Light pop": "轻快弹响",
       "Volume": "音量",
-      "Test feedback": "测试反馈",
-      "Feedback test": "反馈测试",
-      "Use this to confirm animation and sound work in this Chrome profile.": "用它确认当前 Chrome 配置里的动画和音效是否可用。",
-      "Sound blocked": "音效被拦截",
-      "Chrome did not unlock audio for this panel. Click Test feedback again after interacting with the panel.": "Chrome 还没有允许这个面板播放音效。和面板交互后，再点一次测试反馈。",
       "Project and author": "项目与作者",
       "Open the project page or follow updates from the author.": "打开项目页面，或关注作者更新。",
       "Open GitHub project": "打开 GitHub 项目",
@@ -818,16 +700,16 @@ console.log("示例代码块");
       "Add a Markdown draft first. Open or create an X Article draft.": "先添加 Markdown 草稿，再打开或新建 X 文章草稿。",
       "Open X Articles so xPoster can load the page script.": "打开 X 文章，让 xPoster 加载页面脚本。",
       "No X Article is open yet.": "尚未打开 X 文章。",
-      "Load the example or paste Markdown before checking X.": "检查 X 前先加载样例或粘贴 Markdown。",
-      "Load the example or paste a Markdown draft before checking X.": "检查 X 前先加载样例或粘贴 Markdown 草稿。",
-      "Add a draft or load the example before checking X.": "检查 X 前先粘贴 Markdown 或加载样例。",
+      "Paste or choose Markdown before checking X.": "检查 X 前先粘贴或选择 Markdown。",
+      "Paste or choose a Markdown draft before checking X.": "检查 X 前先粘贴或选择 Markdown 草稿。",
+      "Add a draft before checking X.": "检查 X 前先添加草稿。",
       "Load xPoster as an unpacked extension in Chrome.": "在 Chrome 中加载 xPoster 解包扩展。",
       "Load xPoster as an unpacked extension in signed-in Chrome.": "在已登录的 Chrome 中加载 xPoster 解包扩展。",
       "Confirm this xPoster copy is loaded in the signed-in Chrome profile.": "确认这个 xPoster 已加载到已登录的 Chrome 配置中。",
       "Open X Articles in the active tab.": "在当前标签页打开 X 文章。",
-      "Paste Markdown, choose a file, or use the example to try the workflow.": "粘贴 Markdown、选择文件，或使用样例体验流程。",
-      "Add Markdown, choose a file, or use the example to try the workflow.": "粘贴 Markdown、选择文件，或使用样例体验流程。",
-      "Add a draft, choose a file, or load the example.": "粘贴 Markdown、选择文件，或加载样例。",
+      "Paste Markdown or choose a file.": "粘贴 Markdown 或选择文件。",
+      "Add Markdown or choose a file.": "添加 Markdown 或选择文件。",
+      "Add a draft or choose a file.": "添加草稿或选择文件。",
       "X can still open a Markdown file when needed.": "需要时，X 仍可打开 Markdown 文件。",
       "The article body is not ready yet.": "文章正文尚未准备好。",
       "This is a recognition preview. Image links stay as text in the draft box; xPoster downloads public images during Write and keeps failed downloads as links.": "这是识别预览。图片链接会作为 Markdown 保留；写入时 xPoster 会下载公开图片，失败的图片保留为链接。",
@@ -892,7 +774,7 @@ console.log("示例代码块");
       "Write or check an article to create the first record.": "载入 Markdown、检查或写入文章后会生成第一条记录。",
       "Load Markdown, run Check, or Write article to create the first record.": "载入 Markdown、运行检查或写入文章后会生成第一条记录。",
       "All saved drafts cleared.": "已清空所有保存的草稿。",
-      "Loaded example Markdown draft.": "已载入 Markdown 样例草稿。",
+
       "record(s), newest first.": "条记录，最新在前。",
       "local record(s), newest first.": "条记录，最新在前。",
       "Draft loaded": "草稿已载入",
@@ -918,7 +800,7 @@ console.log("示例代码块");
       "Dropped file": "拖入文件",
       "Dropped text": "拖入文本",
       "Pasted text": "粘贴文本",
-      "Example draft": "示例草稿",
+
       "Restored draft": "已恢复草稿",
       "Typed draft": "手写草稿",
       "Queued draft": "待发布草稿",
@@ -1029,10 +911,7 @@ console.log("示例代码块");
       "Markdown draft": "Markdown 草稿",
       "Paste Markdown here, then save it to Pending.": "在这里粘贴 Markdown，然后保存到待发布草稿。",
       "Choose Markdown file": "选择 Markdown 文件",
-      "Load live smoke fixture": "加载实时烟测草稿",
-      "Load the live verification fixture": "加载实时验证草稿",
-      "Load example Markdown draft": "加载 Markdown 样例草稿",
-      "Load an example Markdown draft": "加载 Markdown 样例草稿",
+
       "Supports headings, lists, links, images, tables, tweet links, code blocks, and dividers. Web image links need a one-time Chrome approval; local image paths need a folder in Settings.": "支持标题、列表、链接、图片、表格、推文链接、代码块和分割线。网页图片写入时自动尝试处理；本地图片路径需要在设置里选择文件夹。",
       "Supports headings, lists, links, images, tables, tweet links, code blocks, and dividers. Nothing is written to X until you click Import.": "支持标题、列表、链接、图片、表格、推文链接、代码块和分割线。点击导入前，不会写入 X。",
       "Supports headings, links, images, tables, tweet links, code blocks, and dividers. Remote images may ask for permission to read that image site.": "支持标题、链接、图片、表格、推文链接、代码块和分割线。网页图片会在写入时自动尝试处理。",
@@ -1161,8 +1040,7 @@ console.log("示例代码块");
       "Download blocked": "下载受阻",
       "Some web images could not be downloaded.": "有些网页图片无法下载。",
       Allow: "继续",
-      Smoke: "烟测",
-      Example: "样例",
+
       "No title yet": "暂无标题",
       "Article body": "文章正文",
       "Write Markdown to inspect the article structure.": "输入 Markdown 以检查文章结构。",
@@ -1233,8 +1111,7 @@ console.log("示例代码块");
       "Current issues": "当前问题",
       "What needs attention": "需要处理什么",
       "Load Markdown to see the active blockers.": "加载 Markdown 后查看当前阻塞项。",
-      "Paste Markdown, choose a file, or load the smoke fixture.": "粘贴 Markdown、选择文件，或加载烟测草稿。",
-      "Paste Markdown, choose a file, or load the example draft.": "粘贴 Markdown、选择文件，或加载样例草稿。",
+      "Paste Markdown or choose a file.": "粘贴 Markdown 或选择文件。",
       "Conversion map": "转换说明",
       "What will be imported": "将导入的内容",
       "Content xPoster found": "xPoster 识别到的内容",
@@ -1478,13 +1355,10 @@ console.log("示例代码块");
       "Review after import": "导入后检查",
       "Finish after import": "导入后收尾",
       "After import": "导入后",
-      "Follow the X Articles smoke path from fixture to evidence package.": "从测试草稿开始，完成导入、检查文章结果，并保存记录。",
+
       "Confirm the X Article looks right before you finish.": "完成前确认 X 文章看起来正确。",
       Focus: "聚焦",
-      "Load example": "加载样例",
-      "Load fixture": "加载样例",
-      "Load the example draft or keep the current Markdown draft.": "加载样例草稿，或保留当前 Markdown 草稿。",
-      "Load the smoke fixture or keep the current Markdown draft.": "加载烟测草稿，或保留当前 Markdown 草稿。",
+
       "Open target": "打开目标",
       "Open article": "打开文章",
       "Use an active X Articles tab.": "使用当前 X 文章编辑页。",
@@ -1521,7 +1395,7 @@ console.log("示例代码块");
       Path: "路径",
       Copy: "复制",
       "Loaded unpacked": "已加载解包扩展",
-      "Loaded example Markdown draft.": "已加载样例 Markdown 草稿。",
+
       "Extension loaded": "扩展已加载",
       "Confirm this folder is loaded in the signed-in Chrome profile.": "确认此文件夹已加载到已登录的 Chrome 配置中。",
       "Confirm xPoster is loaded in the signed-in Chrome profile.": "确认 xPoster 已加载到已登录的 Chrome 配置中。",
@@ -1556,12 +1430,10 @@ console.log("示例代码块");
       "Load xPoster in the signed-in Chrome profile.": "在已登录的 Chrome 配置中加载 xPoster。",
       "Load this folder in the signed-in Chrome profile.": "在已登录的 Chrome 配置中加载此文件夹。",
       "Load the xPoster folder as an unpacked extension in signed-in Chrome.": "在已登录 Chrome 中将 xPoster 文件夹加载为解包扩展。",
-      "Smoke draft": "样例草稿",
-      "Example draft": "样例草稿",
+
       "Markdown draft": "Markdown 草稿",
-      "Load the smoke fixture or a real Markdown draft.": "加载样例，或使用真实 Markdown 草稿。",
-      "Load the example or use a real Markdown draft.": "加载样例，或使用真实 Markdown 草稿。",
-      "Load the smoke fixture or paste Markdown before live verification.": "检查前请加载样例或粘贴 Markdown。",
+      "Use a real Markdown draft.": "使用真实 Markdown 草稿。",
+      "Paste Markdown before live verification.": "检查前请粘贴 Markdown。",
       "Bridge and upload": "编辑器和上传",
       "Editor and upload": "编辑器和上传",
       "Editor and media": "编辑器和媒体",
@@ -1569,7 +1441,6 @@ console.log("示例代码块");
       "Run diagnostics in the live X editor.": "在实时 X 编辑器中运行检查。",
       "Run Check in the live X editor.": "在实时 X 编辑器中运行检查。",
       "Click Check X page in the live X editor.": "在实时 X 编辑器中点击检查文章。",
-      "Click Check article in the live X editor.": "在实时 X 编辑器中点击检查文章。",
       "Click Check article in the live X editor.": "在实时 X 编辑器中点击检查文章。",
       "Import evidence": "导入记录",
       "Import record": "导入记录",
@@ -1598,7 +1469,7 @@ console.log("示例代码块");
       "Record the final X Article result after import.": "导入后记录最终 X 文章结果。",
       Reset: "重置",
       "Title set": "标题已设置",
-      "xPoster live smoke test or the selected draft title.": "xPoster 实时烟测标题或选中草稿标题。",
+
       "The title from your selected draft.": "选中草稿里的标题。",
       "Text formatting": "文本格式",
       "Heading 1": "一级标题",
@@ -1650,7 +1521,6 @@ console.log("示例代码块");
       "Run a publishing check or import to save a record.": "运行检查或导入以保存记录。",
       "Run Check X page or Import to save a record.": "运行检查文章或导入以保存记录。",
       "Run Check article or Import to save a record.": "运行检查文章或导入以保存记录。",
-      "Run Check article or Import to save a record.": "运行检查文章或导入以保存记录。",
       "No check or import saved yet.": "尚未保存检查或导入记录。",
       "No local record saved yet.": "还没有本地记录。",
       "Open this when you need a local record.": "需要本地记录时再打开。",
@@ -1686,9 +1556,6 @@ console.log("示例代码块");
       "Warm bell": "温和铃声",
       "Light pop": "轻快弹响",
       "Volume": "音量",
-      "Test feedback": "测试反馈",
-      "Feedback test": "反馈测试",
-      "Use this to confirm animation and sound work in this Chrome profile.": "用它确认当前 Chrome 配置里的动画和音效是否可用。",
       "Project and author": "项目与作者",
       "Open the project page or follow updates from the author.": "打开项目页面，或关注作者更新。",
       "Open GitHub project": "打开 GitHub 项目",
@@ -1721,7 +1588,7 @@ console.log("示例代码块");
       "Records ready": "记录已准备好",
       "Review done": "检查完成",
       "Result done": "结果完成",
-      "Load the smoke fixture or paste Markdown before checking X.": "先加载测试草稿或粘贴 Markdown，然后再检查 X 页面。",
+      "Paste Markdown before checking X.": "检查 X 页面前先粘贴 Markdown。",
       "Complete the live result checklist first.": "请先完成文章结果检查清单。",
       "Complete the article review checklist first.": "请先完成文章检查清单。",
       "Finish the article review first.": "请先完成文章检查。",
@@ -1774,7 +1641,7 @@ console.log("示例代码块");
       "Copy or save the final package with diagnostics, plan, import evidence, and live result checks.": "复制或保存最终证据包，里面包含诊断、导入计划、导入证据和文章结果检查。",
       "Copy or save the final package with checks, import plan, import record, and article review.": "复制或保存最终记录包，里面包含检查、导入计划、导入记录和文章检查。",
       "No active issues": "当前没有问题",
-      "The local gate is clean. Continue with the live X smoke path before treating the extension as complete.": "本地检查已通过。确认完成前，请继续完成真实 X 导入验证。",
+
       "The local checks are clear. Continue with a real X import before treating this run as complete.": "本地检查已通过。确认完成前，请继续完成一次真实 X 导入。",
       "Copy or save the evidence package before treating this run as complete.": "确认本次运行完成前，请先复制或保存证据包。",
       "Copy or save the final records before treating this run as complete.": "确认本次运行完成前，请先复制或保存最终记录。",
@@ -1944,7 +1811,8 @@ console.log("示例代码块");
   const EN_TEXT = new Map(Array.from(ZH_TEXT.entries()).map(([en, zh]) => [zh, en]));
   i18n?.registerMessages({
     en: Object.fromEntries(Array.from(ZH_TEXT.keys()).map((key) => [key, key])),
-    zh: Object.fromEntries(ZH_TEXT)
+    zh: Object.fromEntries(ZH_TEXT),
+    "zh-TW": Object.fromEntries(Array.from(ZH_TEXT.entries()).map(([key, value]) => [key, shared.toTraditionalChinese(value)]))
   });
 
   const hasChromeApi = () =>
@@ -1958,6 +1826,10 @@ console.log("示例代码块");
 
   function preferredLanguage() {
     return i18n?.preferredLanguage?.() || (/^zh\b/i.test(navigator.language || "") ? "zh" : "en");
+  }
+
+  function isChineseLanguage(language = currentLanguage) {
+    return String(language || "").startsWith("zh");
   }
 
   function normalizeThemeMode(mode) {
@@ -2072,7 +1944,12 @@ console.log("示例代码块");
     if (els.confettiOption) els.confettiOption.checked = successFeedbackOptions.confetti !== false;
     if (els.successSoundOption) els.successSoundOption.checked = successFeedbackOptions.sound !== false;
     if (els.successSoundStyle) els.successSoundStyle.value = successFeedbackOptions.soundStyle || "soft";
-    if (els.successSoundVolume) els.successSoundVolume.value = String(Math.round((successFeedbackOptions.volume || SUCCESS_SOUND_DEFAULT_VOLUME) * 100));
+    const volumePercent = Math.round((successFeedbackOptions.volume || SUCCESS_SOUND_DEFAULT_VOLUME) * 100);
+    if (els.successSoundVolume) els.successSoundVolume.value = String(volumePercent);
+    if (els.successSoundVolumeValue) els.successSoundVolumeValue.value = `${volumePercent}%`;
+    const soundEnabled = successFeedbackOptions.sound !== false;
+    if (els.successSoundStyle) els.successSoundStyle.disabled = !soundEnabled;
+    if (els.successSoundVolume) els.successSoundVolume.disabled = !soundEnabled;
   }
 
   function applySuccessFeedbackOptions(options = successFeedbackOptions) {
@@ -2193,22 +2070,6 @@ console.log("示例代码块");
     if (successFeedbackOptions.sound) void playSuccessSound();
   }
 
-  function testSuccessFeedback() {
-    const key = `test-${Date.now()}`;
-    lastSuccessFeedbackKey = key;
-    if (successFeedbackOptions.confetti) fireSuccessConfetti();
-    if (successFeedbackOptions.sound) {
-      void primeSuccessAudio().then((ready) => {
-        if (ready) {
-          void playSuccessSound({ force: true });
-        } else {
-          setDraftDropStatus("Sound blocked", "Chrome did not unlock audio for this panel. Click Test feedback again after interacting with the panel.", "error");
-        }
-      });
-    }
-    setDraftDropStatus("Feedback test", "Use this to confirm animation and sound work in this Chrome profile.", "done");
-  }
-
   function applyTheme(mode = currentThemeMode) {
     currentThemeMode = normalizeThemeMode(mode);
     const resolvedTheme = resolveTheme(currentThemeMode);
@@ -2252,14 +2113,15 @@ console.log("示例代码块");
     const source = sourceText(text);
     if (i18n) {
       const translated = i18n.t(source);
-      if (translated !== source || currentLanguage !== "zh") return translated;
+      if (translated !== source || !isChineseLanguage()) return translated;
     }
-    if (currentLanguage !== "zh") return source;
+    if (!isChineseLanguage()) return source;
     const direct = ZH_TEXT.get(source);
-    if (direct) return direct;
+    if (direct) return currentLanguage === "zh-TW" ? shared.toTraditionalChinese(direct) : direct;
     const pattern = translatePatternText(source);
-    if (pattern !== source) return pattern;
-    return translateCompoundText(source);
+    if (pattern !== source) return currentLanguage === "zh-TW" ? shared.toTraditionalChinese(pattern) : pattern;
+    const compound = translateCompoundText(source);
+    return currentLanguage === "zh-TW" ? shared.toTraditionalChinese(compound) : compound;
   }
 
   function sourceText(text) {
@@ -2304,7 +2166,7 @@ console.log("示例代码块");
       [/^(\d+)\/(\d+) checks ready$/, "$1/$2 项检查就绪"],
       [/^(\d+)\/(\d+) live verification steps ready\.$/, "$1/$2 个导入后检查步骤就绪。"],
       [/^(\d+)\/(\d+) after-import steps ready\.$/, "$1/$2 个导入后步骤就绪。"],
-      [/^(\d{1,2}:\d{2}) Loaded example Markdown draft\.$/, "$1 已加载样例 Markdown 草稿。"],
+
       [/^(\d+)\/(\d+) proof items ready\.$/, "$1/$2 个完成记录项就绪。"],
       [/^(\d+)\/(\d+) live result checks recorded(?:, including the page import button path)?\.$/, "已记录 $1/$2 项文章检查。"],
       [/^(\d+)\/(\d+) article review checks recorded(?:, including the page import button path)?\.$/, "已记录 $1/$2 项文章检查。"],
@@ -2709,7 +2571,7 @@ console.log("示例代码块");
     if (!root.contains?.(els.evidenceText) && root !== els.evidenceText) return;
     const source = "Run a publishing check or import to save a record.";
     const current = els.evidenceText.textContent.trim();
-    if (current === source || current === ZH_TEXT.get(source)) {
+    if (current === source || current === ZH_TEXT.get(source) || current === shared.toTraditionalChinese(ZH_TEXT.get(source))) {
       els.evidenceText.textContent = translateText(source);
     }
   }
@@ -2955,21 +2817,16 @@ console.log("示例代码块");
       const rounded = value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
       return `${String(rounded).replace(/\.0$/, "")}${unit}`;
     };
-    if (currentLanguage === "zh" && zhTenThousand && abs >= 10000) return format(10000, "w");
-    if (abs >= 1000000) return format(1000000, currentLanguage === "zh" ? "m" : "M");
-    if (abs >= 1000) return format(1000, currentLanguage === "zh" ? "k" : "K");
+    if (isChineseLanguage() && zhTenThousand && abs >= 10000) return format(10000, "w");
+    if (abs >= 1000000) return format(1000000, isChineseLanguage() ? "m" : "M");
+    if (abs >= 1000) return format(1000, isChineseLanguage() ? "k" : "K");
     return String(count);
   }
 
   function formatCompactUnit(count, enSingular, enPlural, zhUnit, options = {}) {
     const formatted = formatCompactCount(count, options);
-    if (currentLanguage === "zh") return `${formatted} ${zhUnit}`;
+    if (isChineseLanguage()) return `${formatted} ${currentLanguage === "zh-TW" ? shared.toTraditionalChinese(zhUnit) : zhUnit}`;
     return `${formatted} ${Number(count || 0) === 1 ? enSingular : enPlural}`;
-  }
-
-  function formatRecognizedItem(count, enSingular, enPlural, zhUnit) {
-    if (currentLanguage === "zh") return `${count} ${zhUnit}`;
-    return pluralizeUnit(count, enSingular, enPlural);
   }
 
   function draftRecognitionText(parsed = latestParsed, counts = latestCounts) {
@@ -3049,7 +2906,6 @@ console.log("示例代码块");
       "drop-file": "Dropped file",
       drop: "Dropped text",
       paste: "Pasted text",
-      example: "Example draft",
       restored: "Restored draft",
       queue: "Queued draft",
       typed: "Typed draft"
@@ -4468,23 +4324,15 @@ console.log("示例代码块");
       }
     }
     const gate = getImportGate(checks);
-    const nextAction = buildNextAction(checks, gate);
-    currentNextAction = nextAction;
     if (els.importDraft?.closest(".actions")) {
       els.importDraft.closest(".actions").dataset.empty = latestParsed?.segments?.length ? "false" : "true";
     }
-    applyPrimaryActionToImportButton(nextAction);
-    updateSecondaryActions(nextAction);
-    updateWorkflowRail(checks);
+    updateWriteButton();
     updateLiveRunbook(checks, gate);
-    updateNextAction(checks, gate);
     updateProofDeck(checks, gate);
     updateCompletionAudit(checks, gate);
-    updateQuickSteps(checks, gate);
-    updateLiveGate(checks, gate);
     updateRecoveryPanel(checks, gate);
     updateTargetContextPanel();
-    updateCommandDock(checks, gate);
     updateIssueQueue(checks, gate);
     updateExecutionTimeline(checks, gate);
     syncRecordPanel();
@@ -4499,7 +4347,6 @@ console.log("示例代码块");
 
   function focusMarkdownInput() {
     showWorkspacePanel("draft");
-    setActiveJump("draft");
     scrollTargetIntoView(queueModeActive() ? els.draftQueue : els.markdown, "center");
     if (!queueModeActive()) window.setTimeout(() => els.markdown?.focus?.(), 0);
     log("Focus the Markdown editor below.");
@@ -4527,28 +4374,6 @@ console.log("示例代码块");
     const labelNode = els.importDraft.querySelector("span");
     if (labelNode) setLocalizedText(labelNode, label);
     translateDynamicDom(els.importDraft);
-  }
-
-  function applyPrimaryActionToImportButton(action) {
-    if (!action) return;
-    updateWriteButton();
-  }
-
-  function updateSecondaryActions(primaryAction = currentNextAction) {
-    const primary = primaryAction?.action || "";
-    const focusOnly = new Set(["loadFile"]);
-    if (els.openArticles) {
-      els.openArticles.hidden = true;
-    }
-    if (els.dockCheck) {
-      els.dockCheck.hidden = true;
-    }
-  }
-
-  function applyImportActionToButton(button, action) {
-    if (!button || !action) return;
-    button.disabled = !action.enabled;
-    setLocalizedText(button, action.label);
   }
 
   function updateWriteButton({ busy = false } = {}) {
@@ -4635,194 +4460,6 @@ console.log("示例代码块");
       return { tone: "ready", text: mediaEstimate.total ? mediaCapacityText(mediaEstimate) : `Web images: ${remoteCount} ready` };
     }
     return { tone: "ready", text: mediaEstimate.total ? mediaCapacityText(mediaEstimate) : `Web images: ${remoteCount}` };
-  }
-
-  function updateNextAction(checks = null, gate = null) {
-    const action = buildNextAction(checks || buildPreflightChecks(), gate);
-    currentNextAction = action;
-    const actionsVisible = els.importDraft?.closest(".actions")?.dataset.empty === "false";
-    els.nextAction.dataset.tone = action.tone;
-    els.nextActionTitle.textContent = action.title;
-    els.nextActionDetail.textContent = action.detail;
-    if (els.nextActionButton) {
-      els.nextActionButton.textContent = action.button;
-      els.nextActionButton.disabled = Boolean(action.disabled);
-      els.nextActionButton.hidden = actionsVisible || !action.action || action.action === "blocked";
-    }
-  }
-
-  function buildNextAction(checks, gate = null) {
-    const byId = new Map(checks.map((check) => [check.id, check]));
-    const resolvedGate = gate || getImportGate(checks);
-    const hasQueue = queueModeActive();
-    const counts = latestCounts || shared.segmentCounts([]);
-    const needsBridge = (counts.code || 0) + (counts.divider || 0) + (counts.tweet || 0) > 0;
-    const needsUploads = (counts.image || 0) + (counts.table || 0) > 0;
-    const needsAssets = Boolean(localImageFolderStatus().count);
-    const liveResult = buildLiveResultEvidence();
-
-    if (byId.get("draft")?.tone !== "ok") {
-      return {
-        tone: "warn",
-        title: "Add a Markdown draft",
-        detail: "Paste Markdown in the editor, choose a .md file, or use Example to try the workflow first.",
-        button: "Add Markdown",
-        action: "addDraft"
-      };
-    }
-    if (hasQueue && resolvedGate.ok && !latestEvidence?.kind?.startsWith("import")) {
-      return {
-        tone: "ready",
-        title: "Write queued drafts",
-        detail: "Ready. xPoster will write queued drafts one by one and remove each successful item.",
-        button: "Write all drafts",
-        action: "import"
-      };
-    }
-    if (byId.get("target")?.tone !== "ok") {
-      return {
-        tone: "warn",
-        title: "Open article",
-        detail: "Open or create the X Article you want to fill. Keep that tab active while importing.",
-        button: "Open article",
-        action: "openArticles"
-      };
-    }
-    if (byId.get("page-script")?.tone === "error") {
-      const oldImporter = originalImporterResidueStatus();
-      return {
-        tone: "error",
-        title: oldImporter.detected ? "Old Markdown importer detected" : "Refresh X Article tab",
-        detail: oldImporter.detected
-          ? "The original X Article Markdown Paste script is still active in this tab. Refresh or reopen the X Article tab before importing so image markers are handled only by xPoster."
-          : "Refresh the X Article tab so the latest xPoster page script handles images.",
-        button: "Refresh X",
-        action: "refreshXTab"
-      };
-    }
-    if ((needsBridge || needsUploads) && !latestPageStatus?.hasEditor) {
-      return {
-        tone: "warn",
-        title: "Open an article editor",
-        detail: "Create or open an X Article draft, then click Check article so xPoster can confirm text and image access.",
-        button: "Open article",
-        action: "openArticles"
-      };
-    }
-    if ((needsBridge && byId.get("bridge")?.tone !== "ok") || (needsUploads && byId.get("uploads")?.tone !== "ok")) {
-      return {
-        tone: "warn",
-        title: "Check the article",
-        detail: "Check that this X Article can accept text and upload images before importing.",
-        button: "Check article",
-        action: "check"
-      };
-    }
-    if (needsAssets && byId.get("assets")?.tone !== "ok") {
-      return {
-        tone: "warn",
-        title: "Choose local image folder",
-        detail: "Relative image paths need a readable folder selected from the active X tab.",
-        button: "Choose",
-        action: "chooseVault"
-      };
-    }
-    if (!latestEvidence?.kind?.startsWith("import")) {
-      return {
-        tone: "ready",
-        title: "Write to X draft",
-        detail: "Ready. xPoster will fill the open X Article, then you review it before publishing.",
-        button: "Write to X draft",
-        action: "import"
-      };
-    }
-    if (!liveResult.complete) {
-      return {
-        tone: latestEvidence ? "warn" : "ready",
-        title: "Review imported article",
-        detail: `${liveResult.checked}/${liveResult.total} final article checks are recorded. Finish the article review before saving final records.`,
-        button: "Review",
-        action: "liveResult"
-      };
-    }
-    return {
-      tone: "ready",
-      title: "Save final records",
-      detail: "The article review is complete. Copy or save the final records.",
-      button: "Records",
-      action: "package"
-    };
-  }
-
-  function updateCommandDock(checks = null, gate = null) {
-    if (!els.commandDock) return;
-    const resolvedChecks = checks || buildPreflightChecks();
-    const resolvedGate = gate || getImportGate(resolvedChecks);
-    const readyCount = resolvedChecks.filter((check) => check.tone === "ok").length;
-    const readiness = resolvedChecks.length ? Math.round((readyCount / resolvedChecks.length) * 100) : 0;
-    const liveResult = buildLiveResultEvidence();
-    const title = resolvedGate.ok
-      ? "Ready"
-      : friendlyCheckLabel(resolvedChecks.find((check) => check.tone !== "ok")?.label || "Check");
-    const detail = resolvedGate.ok
-      ? liveResult.complete
-        ? "Import checks are clear; records can be exported."
-        : "Import checks are clear; review the article after import."
-      : resolvedGate.message;
-    els.commandDock.dataset.tone = resolvedGate.tone;
-    els.dockGate.textContent = title;
-    els.dockDetail.textContent = detail;
-    els.dockMeterBar.style.width = `${readiness}%`;
-    els.dockCheck.textContent = "Check article";
-    applyImportActionToButton(els.dockImport, primaryImportAction(resolvedGate));
-    els.dockEvidence.dataset.ready = liveResult.complete ? "true" : "false";
-    translateDynamicDom(els.commandDock);
-  }
-
-  function updateQuickSteps(checks = null, gate = null) {
-    if (!els.quickSteps) return;
-    const resolvedChecks = checks || buildPreflightChecks();
-    const resolvedGate = gate || getImportGate(resolvedChecks);
-    const byId = new Map(resolvedChecks.map((check) => [check.id, check]));
-    const hasDraft = byId.get("draft")?.tone === "ok";
-    const hasQueue = queueModeActive();
-    const hasImportEvidence = Boolean(latestEvidence?.kind?.startsWith("import"));
-    const liveResult = buildLiveResultEvidence();
-    const stepState = [
-      {
-        id: "draft",
-        tone: hasDraft || hasQueue ? "ok" : "warn",
-        title: hasQueue ? "Review queue" : "Input Markdown",
-        detail: hasQueue
-          ? `${draftQueue.length} draft(s) queued.`
-          : hasDraft
-            ? "Markdown ready."
-            : "Add or drop your draft."
-      },
-      {
-        id: "import",
-        tone: liveResult.complete ? "ok" : hasImportEvidence ? "ok" : hasDraft || hasQueue ? "ready" : "idle",
-        title: hasQueue ? "Write queue" : "Write to X draft",
-        detail: liveResult.complete
-          ? "Article is written."
-          : hasImportEvidence
-            ? "Written. Review and publish in X."
-            : hasQueue
-              ? "Write all drafts or edit one."
-              : hasDraft
-                ? "Use the current X Article or create one."
-                : "Add Markdown first."
-      }
-    ];
-
-    for (const step of stepState) {
-      const item = els.quickSteps.querySelector(`[data-step="${step.id}"]`);
-      if (!item) continue;
-      item.dataset.tone = step.tone;
-      item.querySelector("strong").textContent = step.title;
-      item.querySelector("div > span").textContent = step.detail;
-    }
-    translateDynamicDom(els.quickSteps.closest("section"));
   }
 
   function updateIssueQueue(checks = null, gate = null) {
@@ -4923,86 +4560,6 @@ console.log("示例代码块");
     }
 
     return issues;
-  }
-
-  function friendlyCheckLabel(label) {
-    return (
-      {
-        Target: "X Article",
-        Bridge: "X editor",
-        "Target lock": "Current article",
-        "Editor content": "Existing content",
-        Assets: "Local images",
-        Plan: "Draft contents"
-      }[label] || label
-    );
-  }
-
-  function updateLiveGate(checks = null, gate = null) {
-    if (!els.liveGate) return;
-    const resolvedChecks = checks || buildPreflightChecks();
-    const resolvedGate = gate || getImportGate(resolvedChecks);
-    const audit = buildCompletionAuditEvidence(resolvedChecks, resolvedGate);
-    const proof = buildProofDeckEvidence(resolvedChecks, resolvedGate);
-    const liveResult = buildLiveResultEvidence();
-    const hasImportEvidence = Boolean(latestEvidence?.kind?.startsWith("import"));
-    const importedOk = latestEvidence?.kind === "import";
-    const firstGateBlocker = resolvedChecks.find(
-      (check) => check.tone !== "ok" && (check.id !== "remote-images" || check.tone !== "ok")
-    );
-    const hasHardBlocker = audit.items.some((item) => item.tone === "error");
-    const mainTone = audit.complete
-      ? "ready"
-      : resolvedGate.tone === "error" || hasHardBlocker
-        ? "error"
-        : hasImportEvidence || liveResult.checked
-          ? "warn"
-          : resolvedGate.ok
-            ? "ready"
-            : "warn";
-    const firstOpen = audit.items.find((item) => item.tone !== "ok" && item.tone !== "ready");
-    const percent = audit.total ? Math.round((audit.proven / audit.total) * 100) : 0;
-
-    els.liveGate.dataset.tone = mainTone;
-    els.liveGatePrimary.textContent = audit.complete
-      ? "Final record ready"
-      : !resolvedGate.ok && firstGateBlocker
-        ? `${friendlyCheckLabel(firstGateBlocker.label)} needs attention`
-      : resolvedGate.ok && !hasImportEvidence
-        ? "Ready to import"
-        : hasImportEvidence && !liveResult.complete
-          ? "Review imported article"
-          : firstOpen?.label || "More checks needed";
-    els.liveGateDetail.textContent = audit.complete
-      ? "Copy or save the final local record before treating this import as complete."
-      : !resolvedGate.ok
-        ? resolvedGate.message
-        : firstOpen?.detail || resolvedGate.message;
-    els.liveGateScore.textContent = `${audit.proven}/${audit.total}`;
-    els.liveGateMeterBar.style.width = `${percent}%`;
-
-    const chips = [
-      {
-        label: "Draft",
-        tone: audit.items.find((item) => item.id === "draft")?.tone || "idle"
-      },
-      {
-        label: "X Article",
-        tone: audit.items.find((item) => item.id === "target")?.tone || "idle"
-      },
-      {
-        label: importedOk ? "Imported" : resolvedGate.ok ? "Import ready" : "Import",
-        tone: audit.items.find((item) => item.id === "import")?.tone || "idle"
-      },
-      {
-        label: proof.complete ? "Records ready" : liveResult.complete ? "Review done" : "Review",
-        tone: audit.items.find((item) => item.id === "package")?.tone || "idle"
-      }
-    ];
-    els.liveGateChips.innerHTML = chips
-      .map((chip) => `<span data-tone="${shared.escapeHtml(chip.tone)}">${shared.escapeHtml(chip.label)}</span>`)
-      .join("");
-    translateDynamicDom(els.liveGate);
   }
 
   function issueFromCheck(check) {
@@ -5164,61 +4721,6 @@ console.log("示例代码块");
     return "Idle";
   }
 
-  function updateWorkflowRail(checks = null) {
-    const byId = new Map((checks || buildPreflightChecks()).map((check) => [check.id, check]));
-    const liveResult = buildLiveResultEvidence();
-    const counts = latestCounts || shared.segmentCounts([]);
-    const uploadCount = (counts.image || 0) + (counts.table || 0);
-    const specialCount = (counts.code || 0) + (counts.divider || 0) + (counts.tweet || 0);
-    const stages = [
-      {
-        id: "draft",
-        tone: byId.get("draft")?.tone || "idle",
-        detail: latestParsed?.segments?.length
-          ? `${latestParsed.segments.length} block${latestParsed.segments.length === 1 ? "" : "s"} loaded${latestParsed.title ? "; title found" : ""}.`
-          : "No Markdown loaded."
-      },
-      {
-        id: "target",
-        tone: byId.get("target")?.tone || "idle",
-        detail: latestPageStatus?.hasEditor ? "Editor visible." : latestPageStatus?.isArticleRoute ? "Draft can be created." : "Open X Articles."
-      },
-      {
-        id: "bridge",
-        tone: byId.get("bridge")?.tone || "idle",
-        detail: latestDiagnostics?.main?.hasDraftStateNode
-          ? `${specialCount} embed/code item${specialCount === 1 ? "" : "s"} ready.`
-          : "Run a check."
-      },
-      {
-        id: "media",
-        tone: byId.get("uploads")?.tone || "idle",
-        detail: uploadCount
-          ? latestDiagnostics?.main?.hasOnFilesAdded
-            ? `${uploadCount} upload item${uploadCount === 1 ? "" : "s"} ready.`
-            : `${uploadCount} upload item${uploadCount === 1 ? "" : "s"} need the X editor.`
-          : "No uploads required."
-      },
-      {
-        id: "evidence",
-        tone: liveResult.complete ? "ok" : latestEvidence ? "warn" : "idle",
-        detail: liveResult.complete
-          ? "Final result captured."
-          : latestEvidence
-            ? `${liveResult.checked}/${liveResult.total} article review checks.`
-            : "No review yet."
-      }
-    ];
-
-    for (const stage of stages) {
-      const item = els.workflowRail?.querySelector(`[data-stage="${stage.id}"]`);
-      if (!item) continue;
-      item.dataset.tone = stage.tone;
-      item.querySelector("span").textContent = stage.detail;
-    }
-    translateDynamicDom(els.workflowRail);
-  }
-
   function updateLiveRunbook(checks = null, gate = null) {
     if (!els.liveRunbookList) return;
     const resolvedChecks = checks || buildPreflightChecks();
@@ -5240,7 +4742,7 @@ console.log("示例代码块");
           ? `${draftQueue.length} queued draft${draftQueue.length === 1 ? "" : "s"} ready.`
           : hasDraft
             ? `${latestParsed.segments.length} parts loaded; ${latestParsed.title ? "title detected" : "title missing"}.`
-            : "Add a draft or load the example before checking X."
+            : "Add a draft before checking X."
       },
       {
         id: "target",
@@ -5589,15 +5091,6 @@ console.log("示例代码块");
       diagnostics: latestDiagnostics,
       lastEvidence: latestEvidence
     };
-  }
-
-  function canClickImport(gate) {
-    return Boolean(primaryImportAction(gate).enabled);
-  }
-
-  function canImport(checks) {
-    const gate = getImportGate(checks);
-    return ["import", "batch"].includes(primaryImportAction(gate).action);
   }
 
   function localAssetWriteBlocker(checks = buildPreflightChecks()) {
@@ -6379,12 +5872,6 @@ console.log("示例代码块");
     });
   }
 
-  function setActiveJump(target) {
-    els.dockJumps?.querySelectorAll("[data-jump-target]").forEach((button) => {
-      button.setAttribute("aria-current", button.dataset.jumpTarget === target ? "true" : "false");
-    });
-  }
-
   function prefersReducedMotion() {
     return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
   }
@@ -6423,7 +5910,6 @@ console.log("示例代码块");
     const jump = sections[target];
     if (!jump) return;
     jump();
-    setActiveJump(target);
   }
 
   async function refreshPageState() {
@@ -6489,21 +5975,6 @@ console.log("示例代码块");
     els.targetReady.textContent = localizeText(target);
     els.editorReady.textContent = localizeText(editor);
     els.vaultReady.textContent = localizeText(vault);
-  }
-
-  async function prepareImportTarget() {
-    await refreshPageState();
-    const checks = buildPreflightChecks();
-    const gate = getImportGate(checks);
-    const targetContext = buildTargetContextEvidence();
-    if (!gate.ok) {
-      return { ok: false, checks, gate, targetContext };
-    }
-    if (targetContext.available) {
-      const label = targetContext.articleId ? `article ${targetContext.articleId}` : "the open X Article";
-      log(`Import will use ${label}.`);
-    }
-    return { ok: true, checks, gate, targetContext };
   }
 
   async function prepareSimpleWriteTarget(parsed) {
@@ -6735,7 +6206,6 @@ console.log("示例代码块");
     els.summaryTitle.textContent = summarizeTitleResult(main.title);
     els.summaryCover.textContent = summarizeCoverResult(main.cover);
     els.summaryElapsed.textContent = `${((summary.elapsedMs || 0) / 1000).toFixed(1)}s`;
-    updateWorkflowRail();
     translateDynamicDom(els.runSummary);
     scheduleRunSummaryCollapse(summary);
   }
@@ -6805,14 +6275,10 @@ console.log("示例代码块");
     els.liveResultMeta.textContent = result.complete
       ? "Article review complete; save the final records."
       : `${result.checked}/${result.total} article review checks recorded.`;
-    updateWorkflowRail();
     updateLiveRunbook();
-    updateNextAction();
     updateProofDeck();
     updateCompletionAudit();
-    updateLiveGate();
     updateRecoveryPanel();
-    updateCommandDock();
     updateProgressiveSections();
   }
 
@@ -6988,7 +6454,6 @@ console.log("示例代码块");
     const activateDropzone = () => {
       if (dragCancelled) return;
       showWorkspacePanel("draft");
-      setActiveJump("draft");
       dragActive = true;
       els.draftPanel.classList.add("drag-active");
       setDraftDropStatus("Drop Markdown here", "Release to load it.", "ready");
@@ -7080,15 +6545,6 @@ console.log("示例代码块");
       }
       showWorkspacePanel("draft");
     }, true);
-  }
-
-  async function loadSmokeFixture() {
-    setSingleDraftMarkdown(currentLanguage === "zh" ? EXAMPLE_DRAFT_ZH : EXAMPLE_DRAFT, {
-      fileName: "example.md",
-      source: "example",
-      statusTitle: "Markdown loaded",
-      logMessage: "Loaded example Markdown draft."
-    });
   }
 
   async function chooseVault() {
@@ -7209,7 +6665,6 @@ console.log("示例代码块");
         renderDraftQueue();
         if (draftQueue.length > previousLength) {
           showWorkspacePanel("draft");
-          setActiveJump("draft");
           showQueuedDraftAdded(draftQueue.length - previousLength);
         }
       }
@@ -7326,12 +6781,9 @@ console.log("示例代码块");
     els.evidenceText.textContent = JSON.stringify(latestEvidence, jsonSafeReplacer, 2);
     els.copyEvidence.disabled = false;
     updateProgressiveSections();
-    updateWorkflowRail(checks);
     updateLiveRunbook(checks, gate);
-    updateNextAction(checks, gate);
     updateProofDeck(checks, gate);
     updateCompletionAudit(checks, gate);
-    updateLiveGate(checks, gate);
     updateRecoveryPanel(checks, gate);
     updateTargetContextPanel();
     translateDynamicDom();
@@ -7652,16 +7104,6 @@ console.log("示例代码块");
     return "Saved.";
   }
 
-  function recordSummaryItems(record) {
-    const items = [];
-    if (record.action) items.push(record.action);
-    if (record.blocks) items.push(formatCompactUnit(record.blocks, "block", "blocks", "个块", { zhTenThousand: false }));
-    if (record.remoteImages?.count) items.push(formatCompactUnit(record.remoteImages.count, "web image", "web images", "张网页图片", { zhTenThousand: false }));
-    if (record.articleId) items.push(localizeInterpolated("Article {id}", { id: record.articleId }));
-    else if (record.url) items.push(localizeText("Page URL saved"));
-    return items.slice(0, 4);
-  }
-
   function recordKindLabel(kind) {
     if (kind === "draft-loaded") return "Markdown loaded";
     if (kind === "import") return "Import completed";
@@ -7957,7 +7399,6 @@ console.log("示例代码块");
       });
     }
     showWorkspacePanel("draft");
-    setActiveJump("draft");
     log(message);
   }
 
@@ -8003,12 +7444,6 @@ console.log("示例代码块");
 
   function openRecordEditor(recordId) {
     activeRecordEditorId = recordId;
-    syncRecordEditSheet();
-  }
-
-  function closeRecordEditor() {
-    activeRecordEditorId = null;
-    activeDraftEditor = null;
     syncRecordEditSheet();
   }
 
@@ -8278,7 +7713,7 @@ console.log("示例代码块");
         tone: draftReady ? "ok" : "error",
         detail: draftReady
           ? `${latestParsed?.segments?.length || 0} publishable block(s) loaded.`
-          : "Add a draft or load the example before checking X."
+          : "Add a draft before checking X."
       },
       {
         id: "target",
@@ -8461,58 +7896,11 @@ console.log("示例代码块");
     log("Record package saved.");
   }
 
-  async function runNextAction() {
-    switch (currentNextAction?.action) {
-      case "addDraft":
-        openNewDraftEditor();
-        break;
-      case "loadSmoke":
-        await loadSmokeFixture();
-        break;
-      case "loadFile":
-        loadFile();
-        break;
-      case "openArticles":
-        await openArticles();
-        break;
-      case "refreshXTab":
-        await refreshActiveXTab();
-        break;
-      case "check":
-        await runPreflight();
-        break;
-      case "chooseVault":
-        await chooseVault();
-        break;
-      case "import":
-        await primeSuccessAudio();
-        await importDraft();
-        break;
-      case "liveResult":
-        scrollTargetIntoView(els.liveResultList, "center");
-        setActiveJump("verify");
-        log("Review the article checklist.");
-        break;
-      case "package":
-        await copyEvidencePackage();
-        jumpToSection("evidence");
-        break;
-      case "preview":
-        jumpToSection("preview");
-        break;
-      default:
-        log("No next action available.");
-    }
-  }
-
   async function runRunbookAction(action) {
     switch (action) {
       case "addDraft":
         openNewDraftEditor();
         break;
-      case "loadSmoke":
-        await loadSmokeFixture();
-        break;
       case "loadFile":
         loadFile();
         break;
@@ -8533,7 +7921,6 @@ console.log("示例代码块");
         break;
       case "liveResult":
         scrollTargetIntoView(els.liveResultList, "center");
-        setActiveJump("verify");
         log("Review the article checklist.");
         break;
       case "package":
@@ -8590,15 +7977,9 @@ console.log("示例代码块");
   els.pageState?.addEventListener("click", async () => {
     if (els.pageState.dataset.pageAction === "openArticles") await openArticles();
   });
-  els.nextActionButton?.addEventListener("click", runNextAction);
-  els.dockCheck.addEventListener("click", runPreflight);
-  els.dockImport.addEventListener("click", runImportButtonAction);
-  els.dockEvidence.addEventListener("click", () => jumpToSection("evidence"));
-  els.openArticles.addEventListener("click", openArticles);
   els.runPreflight.addEventListener("click", runPreflight);
   els.loadFile.addEventListener("click", loadFile);
   els.draftDropDismiss?.addEventListener("click", dismissDraftDropStatus);
-  els.loadSmoke?.addEventListener("click", loadSmokeFixture);
   els.pickVault.addEventListener("click", chooseVault);
   els.clearVault.addEventListener("click", clearVault);
   els.clearVaultSettings.addEventListener("click", clearVault);
@@ -8621,7 +8002,6 @@ console.log("示例代码块");
   els.recordHistory?.addEventListener("click", handleRecordHistoryClick);
   els.recordHistory?.addEventListener("dblclick", handleRecordHistoryDblClick);
   els.recordHistory?.addEventListener("keydown", handleRecordHistoryKeydown);
-  els.addDraft?.addEventListener("click", openNewDraftEditor);
   els.draftQueueList?.addEventListener("click", handleDraftQueueClick);
   els.recordEditSheet?.addEventListener("click", (event) => {
     if (event.target === els.recordEditSheet) closeMarkdownEditor();
@@ -8680,7 +8060,6 @@ console.log("示例代码块");
       volume: Number(els.successSoundVolume.value || Math.round(SUCCESS_SOUND_DEFAULT_VOLUME * 100)) / 100
     });
   });
-  els.testSuccessFeedback?.addEventListener("click", testSuccessFeedback);
   els.liveRunbookList.addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-runbook-action]");
     if (!button) return;
@@ -8701,11 +8080,6 @@ console.log("示例代码块");
     if (!button) return;
     await runRunbookAction(button.dataset.recoveryAction);
   });
-  els.dockJumps?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-jump-target]");
-    if (!button) return;
-    jumpToSection(button.dataset.jumpTarget);
-  });
   getLiveResultItems().forEach((input) => input.addEventListener("change", saveLiveResultChecks));
   syncPanelLayout();
   installDraftStorageSync();
@@ -8713,7 +8087,6 @@ console.log("示例代码块");
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       showWorkspacePanel(tab.dataset.tab);
-      setActiveJump(tab.dataset.tab);
     });
   });
 

@@ -82,6 +82,9 @@ if (!/src="src\/i18n\.js"[\s\S]*src="sidepanel\.js"/.test(readText("sidepanel.ht
 if (!/src="src\/i18n\.js"[\s\S]*src="diagnostics\.js"/.test(readText("diagnostics.html"))) {
   fail("diagnostics.html must load src/i18n.js before diagnostics.js");
 }
+if (!/src="src\/shared\.js"[\s\S]*src="src\/i18n\.js"[\s\S]*src="diagnostics\.js"/.test(readText("diagnostics.html"))) {
+  fail("diagnostics.html must load src/shared.js before src/i18n.js and diagnostics.js");
+}
 
 for (const language of ["zh-TW", "ja", "fr", "ru"]) {
   if (!i18nText.includes(`code: "${language}"`)) {
@@ -90,6 +93,12 @@ for (const language of ["zh-TW", "ja", "fr", "ru"]) {
 }
 if (!i18nText.includes("AUTO_LANGUAGE") || !i18nText.includes("normalizeLanguagePreference")) {
   fail("src/i18n.js must support an automatic browser-language preference");
+}
+if (!i18nText.includes("LANGUAGE_FALLBACKS") || !i18nText.includes("toTraditionalChinese")) {
+  fail("src/i18n.js must provide zh-TW runtime fallback through Traditional Chinese conversion");
+}
+if (!runtimeText.includes('"zh-TW"')) {
+  fail("runtime UI messages must register zh-TW translations");
 }
 
 if (!process.exitCode) {

@@ -62,6 +62,8 @@
     "These Markdown files were already queued or too large to save together.": "这些 Markdown 文件已在队列中，或整体过大无法保存。",
     "Drop on the article body": "拖到文章正文区域",
     "Release inside the highlighted editor area to write into this article.": "在高亮编辑区域内松开，即可写入这篇文章。",
+    "Open X Article draft": "打开 X 文章草稿",
+    "Release to open X Articles and write this Markdown.": "松开后打开 X 文章并写入这份 Markdown。",
     "Queue Markdown drafts": "加入 Markdown 草稿队列",
     "Release to add them to the xPoster side panel.": "松开后加入 xPoster 侧边栏。",
     "Send Markdown to side panel": "发送 Markdown 到侧边栏",
@@ -79,6 +81,7 @@
     "Saving Markdown drafts to the side panel.": "正在把 Markdown 草稿保存到侧边栏。",
     "Opening side panel...": "正在打开侧边栏...",
     "Loading this Markdown as a draft.": "正在把这份 Markdown 载入为草稿。",
+    "Preparing this Markdown draft.": "正在准备这份 Markdown 草稿。",
     "Saving Markdown drafts for the side panel.": "正在为侧边栏保存 Markdown 草稿。",
     "Connecting folder...": "正在连接文件夹...",
     "Checking local image access.": "正在检查本地图片访问权限。",
@@ -248,6 +251,7 @@
   function normalizeLanguage(language) {
     const value = String(language || "").toLowerCase().replace("_", "-");
     if (value === "auto" || value === "system" || value === "browser") return preferredContentLanguage();
+    if (value === "zh-tw" || value === "zh-hant" || value === "zh-hk") return "zh-TW";
     if (value.startsWith("zh")) return "zh";
     if (value.startsWith("en")) return "en";
     return "en";
@@ -255,7 +259,16 @@
 
   function preferredContentLanguage() {
     const candidates = [navigator.language, ...(Array.isArray(navigator.languages) ? navigator.languages : [])];
-    return candidates.some((language) => String(language || "").toLowerCase().startsWith("zh")) ? "zh" : "en";
+    for (const language of candidates) {
+      const value = String(language || "").toLowerCase().replace("_", "-");
+      if (value === "zh-tw" || value === "zh-hant" || value === "zh-hk") return "zh-TW";
+      if (value.startsWith("zh")) return "zh";
+    }
+    return "en";
+  }
+
+  function isChineseLanguage(language = state.language) {
+    return String(language || "").startsWith("zh");
   }
 
   function contentSourceText(text) {
@@ -264,10 +277,10 @@
 
   function translateContentText(text) {
     const source = contentSourceText(text);
-    if (state.language !== "zh") return source;
+    if (!isChineseLanguage()) return source;
     const direct = CONTENT_ZH_TEXT.get(source);
-    if (direct) return direct;
-    return translateContentPattern(source);
+    const translated = direct || translateContentPattern(source);
+    return state.language === "zh-TW" ? shared.toTraditionalChinese(translated) : translated;
   }
 
   function translateContentPattern(source) {
@@ -1044,11 +1057,6 @@
     return shared.isRemoteHttpImageSource(source);
   }
 
-  async function openSidePanelForRemoteImages() {
-    await saveDraftForSidePanel();
-    await safeRuntimeSendMessage({ type: "xposter:open-side-panel" }).catch(() => {});
-  }
-
   async function saveDraftForSidePanel(markdown = "") {
     const draft = String(markdown || state.currentMarkdown || "");
     if (!draft || !chrome.storage?.local) return;
@@ -1132,7 +1140,7 @@
       const helpStart = translateContentText("If your Markdown says");
       const helpMiddle = translateContentText("choose the folder that contains the");
       const helpEnd = translateContentText("directory.");
-      const helpJoiner = state.language === "zh" ? "，" : ", ";
+      const helpJoiner = isChineseLanguage() ? "，" : ", ";
       const skipLabel = translateContentText("Skip");
       const chooseLabel = translateContentText("Choose folder");
       panel.innerHTML = `
@@ -1380,14 +1388,6 @@
       return url.protocol === "http:" || url.protocol === "https:" ? url.origin : null;
     } catch {
       return null;
-    }
-  }
-
-  function hostLabel(origin) {
-    try {
-      return new URL(origin).host || origin;
-    } catch {
-      return String(origin || "image website");
     }
   }
 
@@ -2877,6 +2877,7 @@
 
   function showDropHint(dataTransfer = null, event = null, intent = dropIntentForTransfer(dataTransfer, event)) {
     const mode = dropHintMode(dataTransfer, intent);
+    const surface = dropHintSurfaceKind(intent);
     let hint = document.getElementById(DROP_HINT_ID);
     if (!hint) {
       hint = document.createElement("section");
@@ -2901,6 +2902,7 @@
     updateDropHintSurface(hint, intent);
     hint.dataset.mode = mode;
     hint.dataset.state = "ready";
+    hint.dataset.surface = surface;
     hint.dataset.target = intent === "article-outside" ? "outside" : "inside";
     const title = hint.querySelector("strong");
     const detail = hint.querySelector("p");
@@ -2910,6 +2912,9 @@
   }
 
   function dropHintCopy(mode, intent = "") {
+    if (intent === "article") {
+      return { title: "Open X Article draft", detail: "Release to open X Articles and write this Markdown." };
+    }
     if (intent === "article-outside") {
       return { title: "Drop on the article body", detail: "Release inside the highlighted editor area to write into this article." };
     }
@@ -2930,6 +2935,9 @@
   }
 
   function processingDropHintCopy(mode, intent = "") {
+    if (intent === "article") {
+      return { title: "Opening X Article...", detail: "Preparing this Markdown draft." };
+    }
     if (intent === "sidepanel-queue") {
       return { title: "Adding drafts...", detail: "Saving Markdown drafts to the side panel." };
     }
@@ -2956,6 +2964,7 @@
     hint.dataset.intent = intent;
     hint.dataset.mode = mode;
     hint.dataset.state = "processing";
+    hint.dataset.surface = dropHintSurfaceKind(intent);
     const title = hint.querySelector("strong");
     const detail = hint.querySelector("p");
     if (title) title.textContent = translateContentText(copy.title);
@@ -2995,6 +3004,12 @@
     hint.style.setProperty("--xposter-drop-surface-height", `${Math.round(rect.height)}px`);
   }
 
+  function dropHintSurfaceKind(intent = "article") {
+    if (intent === "sidepanel-draft" || intent === "sidepanel-queue") return "page-dock";
+    if (intent === "article" && !canDropIntoCurrentArticle(null)) return "page-dock";
+    return "editor";
+  }
+
   function isDropEventOverSurface(event, intent = "article") {
     if (!event) return true;
     const rect = dropSurfaceRect(intent);
@@ -3005,13 +3020,54 @@
   }
 
   function dropSurfaceRect(intent = "article") {
-    if (intent === "sidepanel-draft" || intent === "sidepanel-queue") return pageDropSurfaceRect();
+    const surface = dropHintSurfaceKind(intent);
+    if (surface === "page-dock") return pageDropDockSurfaceRect();
     const editor = findEditor();
     const editorRect = visibleElementRect(editor);
     if (editorRect) {
-      return normalizeDropSurfaceRect(editorSurfaceRect(editor, editorRect) || editorRect);
+      return articleBodyDropDockRect(editor, editorRect);
     }
     return pageDropSurfaceRect();
+  }
+
+  function pageDropDockSurfaceRect() {
+    const margin = 0;
+    const height = Math.min(118, Math.max(86, Math.round(window.innerHeight * 0.12)));
+    return normalizeDropSurfaceRect({
+      left: 0,
+      top: window.innerHeight - height - margin,
+      width: window.innerWidth,
+      height
+    }, {
+      minWidth: window.innerWidth,
+      minHeight: height,
+      maxWidth: window.innerWidth,
+      maxHeight: height,
+      margin
+    });
+  }
+
+  function articleBodyDropDockRect(editor, editorRect) {
+    const containerRect = editorSurfaceRect(editor, editorRect) || editorRect;
+    const margin = 10;
+    const width = Math.max(280, containerRect.width);
+    const height = Math.min(96, Math.max(66, Math.round(window.innerHeight * 0.09)));
+    const top = Math.min(
+      window.innerHeight - height - margin,
+      Math.max(margin, containerRect.bottom - height - margin)
+    );
+    return normalizeDropSurfaceRect({
+      left: containerRect.left,
+      top,
+      width,
+      height
+    }, {
+      minWidth: Math.min(width, Math.max(1, window.innerWidth - margin * 2)),
+      minHeight: height,
+      maxWidth: Math.max(1, window.innerWidth - margin * 2),
+      maxHeight: height,
+      margin
+    });
   }
 
   function pageDropSurfaceRect() {
@@ -3060,14 +3116,14 @@
     };
   }
 
-  function normalizeDropSurfaceRect(rect) {
-    const margin = 14;
+  function normalizeDropSurfaceRect(rect, options = {}) {
+    const margin = options.margin ?? 14;
     const viewportWidth = Math.max(1, window.innerWidth);
     const viewportHeight = Math.max(1, window.innerHeight);
-    const maxWidth = Math.max(1, viewportWidth - margin * 2);
-    const maxHeight = Math.max(1, viewportHeight - margin * 2);
-    const minWidth = Math.min(420, maxWidth);
-    const minHeight = Math.min(190, maxHeight);
+    const maxWidth = Math.min(options.maxWidth ?? Number.POSITIVE_INFINITY, Math.max(1, viewportWidth - margin * 2));
+    const maxHeight = Math.min(options.maxHeight ?? Number.POSITIVE_INFINITY, Math.max(1, viewportHeight - margin * 2));
+    const minWidth = Math.min(options.minWidth ?? 420, maxWidth);
+    const minHeight = Math.min(options.minHeight ?? 190, maxHeight);
     const sourceWidth = Math.min(Math.max(rect.width, minWidth), maxWidth);
     const sourceHeight = Math.min(Math.max(rect.height, minHeight), maxHeight);
     const sourceCenterX = rect.left + rect.width / 2;
@@ -3109,23 +3165,25 @@
         top: var(--xposter-drop-surface-top, 82px);
         width: var(--xposter-drop-surface-width, calc(100vw - 36px));
         height: var(--xposter-drop-surface-height, min(360px, calc(100vh - 112px)));
-        min-height: 150px;
         box-sizing: border-box;
-        display: grid;
-        place-items: center;
-        padding: 18px;
-        --xposter-drop-paper: rgba(255, 255, 255, 0.82);
-        --xposter-drop-line: rgba(15, 20, 25, 0.16);
-        --xposter-drop-dash: rgba(15, 20, 25, 0.22);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        --xposter-drop-paper: rgba(255, 255, 255, 0.94);
+        --xposter-drop-line: rgba(15, 20, 25, 0.14);
+        --xposter-drop-dash: rgba(15, 20, 25, 0.24);
         --xposter-drop-ink: #0f1419;
         --xposter-drop-muted: #536471;
         --xposter-drop-accent: #536471;
+        --xposter-drop-progress: 0%;
         color: #0f1419;
         font: 14px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
         letter-spacing: 0;
         pointer-events: none;
         isolation: isolate;
-        animation: __xposter_drop_mask_in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        contain: layout style paint;
+        animation: __xposter_drop_in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
       }
       #${DROP_HINT_ID}::before {
         content: "";
@@ -3133,43 +3191,42 @@
         inset: 0;
         z-index: 0;
         border: 1px solid var(--xposter-drop-line);
-        border-radius: 14px;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.72), var(--xposter-drop-paper));
+        border-radius: 12px;
+        background: var(--xposter-drop-paper);
         box-shadow:
-          0 18px 44px rgba(15, 20, 25, 0.10),
-          inset 0 0 0 1px rgba(255, 255, 255, 0.58);
-        backdrop-filter: blur(2px);
+          0 14px 36px rgba(15, 20, 25, 0.12),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.62);
       }
       #${DROP_HINT_ID}::after {
         content: "";
         position: absolute;
-        inset: 9px;
+        inset: 7px;
         z-index: 1;
         border: 1px dashed var(--xposter-drop-dash);
-        border-radius: 10px;
-        opacity: 0.72;
+        border-radius: 8px;
+        opacity: 0.56;
       }
       #${DROP_HINT_ID} .__xposter_drop_frame {
         position: relative;
         z-index: 2;
-        width: min(360px, 100%);
-        display: grid;
-        justify-items: center;
-        gap: 9px;
-        text-align: center;
+        width: min(336px, 100%);
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 11px;
+        text-align: left;
         color: var(--xposter-drop-ink);
-        transform: translateY(0);
-        animation: __xposter_drop_copy_in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        animation: __xposter_drop_copy_in 210ms cubic-bezier(0.22, 1, 0.36, 1) both;
       }
       #${DROP_HINT_ID} .__xposter_drop_mark {
+        flex: 0 0 auto;
         position: relative;
-        width: 36px;
-        height: 36px;
+        width: 30px;
+        height: 30px;
         border: 1px solid color-mix(in srgb, var(--xposter-drop-accent), transparent 52%);
         border-radius: 999px;
         background: color-mix(in srgb, var(--xposter-drop-accent), transparent 92%);
-        box-shadow: inset 0 0 0 5px rgba(255, 255, 255, 0.62);
+        box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.66);
       }
       #${DROP_HINT_ID} .__xposter_drop_mark::before,
       #${DROP_HINT_ID} .__xposter_drop_mark::after {
@@ -3181,29 +3238,89 @@
         transform: translate(-50%, -50%);
       }
       #${DROP_HINT_ID} .__xposter_drop_mark::before {
-        width: 13px;
+        width: 11px;
         height: 2px;
         border-radius: 999px;
       }
       #${DROP_HINT_ID} .__xposter_drop_mark::after {
         width: 2px;
-        height: 13px;
+        height: 11px;
         border-radius: 999px;
       }
       #${DROP_HINT_ID} strong {
         position: relative;
         display: block;
-        font-size: 15px;
+        font-size: 13px;
         font-weight: 760;
-        line-height: 1.2;
+        line-height: 1.25;
       }
       #${DROP_HINT_ID} p {
         position: relative;
-        max-width: 26rem;
-        margin: 4px 0 0;
+        max-width: 16.8rem;
+        margin: 3px 0 0;
         color: var(--xposter-drop-muted);
-        font-size: 12px;
+        font-size: 11.5px;
         line-height: 1.35;
+      }
+      #${DROP_HINT_ID}[data-surface="page-dock"] {
+        height: var(--xposter-drop-surface-height, 104px);
+        padding: 14px max(18px, calc((100vw - 980px) / 2));
+      }
+      #${DROP_HINT_ID}[data-surface="page-dock"]::before {
+        border-right: 0;
+        border-bottom: 0;
+        border-left: 0;
+        border-radius: 16px 16px 0 0;
+      }
+      #${DROP_HINT_ID}[data-surface="page-dock"]::after {
+        content: "";
+        position: absolute;
+        left: max(18px, calc((100vw - 980px) / 2));
+        right: max(18px, calc((100vw - 980px) / 2));
+        bottom: 10px;
+        top: auto;
+        height: 2px;
+        border: 0;
+        border-radius: 999px;
+        opacity: 0.92;
+        background:
+          linear-gradient(90deg, var(--xposter-drop-accent) 0 var(--xposter-drop-progress), transparent var(--xposter-drop-progress) 100%),
+          rgba(15, 20, 25, 0.10);
+        overflow: hidden;
+        transition: background 220ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      #${DROP_HINT_ID}[data-surface="page-dock"] .__xposter_drop_frame {
+        width: min(620px, 100%);
+      }
+      #${DROP_HINT_ID}[data-surface="editor"] {
+        min-height: 64px;
+        padding: 10px 14px;
+      }
+      #${DROP_HINT_ID}[data-surface="editor"]::before {
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.38);
+        box-shadow:
+          inset 0 0 0 1px color-mix(in srgb, var(--xposter-drop-accent), transparent 72%),
+          0 10px 30px rgba(15, 20, 25, 0.08);
+      }
+      #${DROP_HINT_ID}[data-surface="editor"]::after {
+        inset: 7px;
+        border-color: color-mix(in srgb, var(--xposter-drop-accent), transparent 42%);
+      }
+      #${DROP_HINT_ID}[data-surface="editor"] .__xposter_drop_frame {
+        width: min(520px, 100%);
+        justify-content: center;
+        text-align: left;
+        display: flex;
+        gap: 10px;
+        padding: 8px 10px;
+        border: 1px solid var(--xposter-drop-line);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--xposter-drop-paper), transparent 10%);
+        box-shadow: 0 12px 30px rgba(15, 20, 25, 0.10);
+      }
+      #${DROP_HINT_ID}[data-surface="editor"] p {
+        max-width: 24rem;
       }
       #${DROP_HINT_ID} .__xposter_drop_mode {
         position: absolute;
@@ -3216,6 +3333,10 @@
       }
       #${DROP_HINT_ID}[data-mode="queue"] {
         --xposter-drop-accent: #8a6f3d;
+      }
+      #${DROP_HINT_ID}[data-mode="sidepanel"],
+      #${DROP_HINT_ID}[data-mode="sidepanel-queue"] {
+        --xposter-drop-accent: #2f6f68;
       }
       #${DROP_HINT_ID}[data-mode="image"] {
         --xposter-drop-accent: #2f6f68;
@@ -3231,6 +3352,7 @@
       }
       #${DROP_HINT_ID}[data-state="processing"] {
         --xposter-drop-accent: #2f6f68;
+        --xposter-drop-progress: 100%;
       }
       #${DROP_HINT_ID}[data-state="processing"] .__xposter_drop_mark {
         animation: __xposter_drop_processing 780ms ease-in-out infinite;
@@ -3238,8 +3360,8 @@
       #${DROP_HINT_ID}[data-state="processing"] .__xposter_drop_mark::after {
         display: none;
       }
-      @keyframes __xposter_drop_mask_in {
-        from { opacity: 0; transform: scale(0.992); }
+      @keyframes __xposter_drop_in {
+        from { opacity: 0; transform: translateY(5px) scale(0.992); }
         to { opacity: 1; transform: scale(1); }
       }
       @keyframes __xposter_drop_copy_in {
@@ -3259,28 +3381,41 @@
       }
       @media (prefers-color-scheme: dark) {
         #${DROP_HINT_ID} {
-          --xposter-drop-paper: rgba(22, 24, 28, 0.82);
+          --xposter-drop-paper: rgba(22, 24, 28, 0.94);
           --xposter-drop-line: rgba(231, 233, 234, 0.18);
           --xposter-drop-dash: rgba(231, 233, 234, 0.22);
           --xposter-drop-ink: #e7e9ea;
           --xposter-drop-muted: #aeb4b9;
         }
         #${DROP_HINT_ID}::before {
-          background:
-            linear-gradient(180deg, rgba(22, 24, 28, 0.74), var(--xposter-drop-paper));
           box-shadow:
             0 18px 48px rgba(0, 0, 0, 0.32),
             inset 0 0 0 1px rgba(231, 233, 234, 0.06);
         }
+        #${DROP_HINT_ID}[data-surface="page-dock"]::after {
+          background: rgba(231, 233, 234, 0.12);
+        }
+        #${DROP_HINT_ID}[data-surface="editor"]::before {
+          background: rgba(22, 24, 28, 0.34);
+        }
       }
-      @media (max-width: 360px) {
+      @media (max-width: 520px) {
         #${DROP_HINT_ID} {
-          min-height: 136px;
-          padding: 14px;
+          left: 12px;
+          right: 12px;
+          width: auto;
+        }
+        #${DROP_HINT_ID}[data-surface="page-dock"] {
+          left: 0;
+          right: 0;
+          width: 100vw;
+          top: auto;
+          bottom: 0;
+          height: 104px;
         }
         #${DROP_HINT_ID} .__xposter_drop_mark {
-          width: 32px;
-          height: 32px;
+          width: 28px;
+          height: 28px;
         }
         #${DROP_HINT_ID} strong {
           font-size: 13px;
