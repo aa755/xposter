@@ -1,32 +1,36 @@
 # xPoster
 
-xPoster is a free Chrome extension that moves a Markdown draft into X Articles.
+Move polished Markdown drafts into X Articles without rebuilding the article by hand.
 
-It is built for people who write in Markdown first, then publish on X later. You paste or load a `.md` file, xPoster previews what it understands, checks the active X Article tab, fills the editor, and leaves the final Publish click to you.
+xPoster is a free, open source Chrome extension for writers who draft in Markdown first and publish on X later. Paste a draft, choose a `.md` file, or drop multiple files into the side panel; xPoster checks the active X Article editor, writes the draft into X, and leaves the final Publish click to you.
 
-[中文说明](README.zh-CN.md)
+[中文说明](README.zh-CN.md) · [Chrome Web Store](https://chromewebstore.google.com/detail/xposter/iimkimodgdjnnmdopeolboakhjmhfbbj?authuser=0&hl=zh-CN) · [Usage guide](docs/usage.md) · [Privacy](docs/privacy.md)
 
-![xPoster side panel screenshot](docs/images/sidepanel-real.png)
+![xPoster Markdown to X Articles overview](docs/images/github-hero.svg)
 
-## Why Use It
+## What It Does
 
-- Write long posts in any Markdown editor instead of drafting everything inside X.
-- Keep a repeatable checklist before import: draft, X Article tab, editor bridge, images, and final review.
-- Convert common Markdown pieces into X-friendly content: headings, paragraphs, lists, quotes, links, inline formatting, code blocks, dividers, images, tables, and tweet embeds.
-- Use it without an account, subscription, license key, or trial gate.
-- Stay in control: xPoster fills the draft editor, but it does not publish the article for you.
+- Turns Markdown drafts into X Article content while preserving the original Markdown in the side panel.
+- Handles the parts that are painful to copy by hand: headings, paragraphs, lists, quotes, inline styles, links, images, tables, code blocks, dividers, and X/Twitter embeds.
+- Runs a preflight check before writing so you know whether the draft, active X Article tab, editor bridge, and images are ready.
+- Supports single drafts and queued multi-file imports from local `.md` files.
+- Keeps recoverable records so previous Markdown can be searched, copied, edited, and written again.
+- Adds an optional, quiet Markdown export button on readable X Article pages.
+- Stays local: no account, subscription, backend service, analytics, license server, or payment gate.
 
-## Quick Install
+## Install
 
-![Chrome load unpacked steps](docs/images/install-steps.svg)
+Recommended for most users:
 
-Recommended install path:
-
-1. Open the Chrome Web Store listing: [xPoster on Chrome Web Store](https://chromewebstore.google.com/detail/xposter/iimkimodgdjnnmdopeolboakhjmhfbbj?authuser=0&hl=zh-CN).
+1. Open [xPoster on the Chrome Web Store](https://chromewebstore.google.com/detail/xposter/iimkimodgdjnnmdopeolboakhjmhfbbj?authuser=0&hl=zh-CN).
 2. Click **Add to Chrome**.
-3. Open X Articles and start using xPoster. The store version is the recommended version and will keep receiving feature updates and improvements.
+3. Open or create an X Article at `https://x.com/compose/articles`.
+
+The Web Store version is the supported install path and receives updates.
 
 Developer install from source:
+
+![Chrome load unpacked steps](docs/images/install-steps.svg)
 
 1. Download or clone this project.
 2. Open Chrome and go to `chrome://extensions`.
@@ -34,54 +38,50 @@ Developer install from source:
 4. Click **Load unpacked**.
 5. Select the xPoster project folder, the folder that contains `manifest.json`.
 
-Use the source install only if you want to inspect or modify the extension yourself.
+Use the source install only if you want to inspect, test, or modify the extension yourself.
 
-## Quick Use
+## Workflow
 
 ![xPoster publishing flow](docs/images/publishing-flow.svg)
 
 1. Open or create an X Article at `https://x.com/compose/articles`.
 2. Open the xPoster side panel.
-3. Paste Markdown in the editor or choose a Markdown file.
-   Single drafts stay in the editor so you can keep working directly.
-4. Check the preview and the issue list.
-5. Click **Check article** so xPoster can confirm the active X Article tab is reachable.
-6. Click **Write article / Import**. If you selected or dropped multiple Markdown files, the editor becomes a Pending list; click a row to edit that draft in a popup, use **Write all drafts** for batch writing, or use **Write this draft** inside the popup for one item.
-7. Review the article inside X.
+3. Paste Markdown, choose a `.md` file, or drop one or more Markdown files.
+4. Review the recognized title, text, media, tables, code, dividers, and embeds.
+5. Click **Check article** to confirm the active X Article editor is reachable.
+6. Click **Write to X draft**. Queued files can be written one by one, edited in a popup, or written as a batch.
+7. Review the imported article inside X.
 8. Click X's own Publish button only when the article looks right.
 
-## Pending Drafts
+## Markdown Support
 
-Pending starts as one Markdown editor plus the write button. When you choose or drop multiple `.md` files, that editor is replaced by a compact Pending list. Click any row to edit its Markdown in a popup. The bottom button writes all queued drafts one by one; the popup can write just the open draft. Each queued draft is removed as soon as xPoster successfully writes it into X Article.
-
-## What Markdown Works
-
-| Markdown input | What xPoster does |
+| Markdown input | How xPoster handles it |
 | --- | --- |
 | `--- title: My title ---` | Uses frontmatter as the X Article title when possible. |
-| `# Heading` | Uses the first H1 as title if frontmatter has no title. |
+| `# Heading` | Uses the first H1 as title when frontmatter has no title. |
 | Paragraphs, lists, quotes | Converts them into rich text for the editor. |
 | `**bold**`, `*italic*`, `` `code` ``, links | Keeps inline formatting where X accepts it. |
 | `![alt](image.png)` | Uploads supported images when xPoster can read the file. |
-| Markdown tables | Renders tables as images so X can show them cleanly. |
+| Markdown tables | Renders tables as images so they stay readable in X. |
 | X/Twitter status URLs | Inserts tweet embeds through X's editor model. |
 | Code fences and dividers | Imports them as X Article atomic blocks where supported. |
 
 A smoke-test draft is included at [fixtures/live-x-smoke.md](fixtures/live-x-smoke.md).
 
-## Image Notes
+## Images
 
-For local images, keep the image files near your Markdown file and choose the local image folder when xPoster asks.
+Local images: keep image files near your Markdown file and choose the local image folder when xPoster asks.
 
-For web images, Chrome may ask for one-time permission to read the image website. xPoster needs that browser permission so it can download the image and upload the actual file into X. It does not grant xPoster permission to publish.
+Web images: Chrome may ask for one-time permission to read the image website. xPoster needs that browser permission to download the image file and pass it to X for upload. Failed downloads stay as Markdown links instead of becoming uploaded X images.
 
 The public source build does not expose private image hosts. If you maintain your own fork and need remote image support for a specific host, declare only the host you trust in your own extension manifest.
 
-## Safety And Privacy
+## Privacy And Safety
 
-- xPoster stores drafts in your browser's local extension storage.
-- xPoster runs on `x.com` and `twitter.com` because it needs to fill the X Article editor.
+- Drafts and import records are stored in your browser's local extension storage.
+- xPoster runs on `x.com` and `twitter.com` because it needs to fill the X Article editor and read article pages for optional Markdown export.
 - xPoster asks for `tabs` only to find and check the active X Article tab.
+- Optional host permissions are requested only when a draft uses web images that need to be downloaded.
 - xPoster does not include analytics, a backend service, a license server, or a payment gate.
 - xPoster does not click Publish. You always review and publish manually in X.
 
@@ -97,9 +97,9 @@ npm test
 npm run verify
 ```
 
-`npm run check` verifies JavaScript syntax and `manifest.json`.
+`npm run check` verifies JavaScript syntax, `manifest.json`, and i18n coverage.
 
-`npm test` verifies the included fixture, manifest references, icons, and Markdown parsing behavior.
+`npm test` verifies the fixture, manifest references, icons, and Markdown parsing behavior.
 
 ## Project Layout
 
@@ -111,27 +111,27 @@ sidepanel.js           Side panel workflow and import controls
 diagnostics.html       Toolbar popup for active-tab checks
 diagnostics.js         Diagnostics UI logic
 src/background.js      MV3 service worker and image fetch proxy
-src/content.js         X page content script and import pipeline
+src/content.js         X page content script, page status, and Markdown export
 src/main-world.js      MAIN-world Draft.js / X editor adapter
 src/shared.js          Markdown parser, paste plan, local image helpers
 fixtures/              Example Markdown used by checks and demos
-docs/                  Beginner guide, images, privacy notes
+docs/                  Usage guide, images, privacy notes
 scripts/               Local verification scripts
 ```
 
 ## Common Problems
 
 **I cannot see xPoster in Chrome.**
-Make sure Developer mode is on, click **Load unpacked**, and select the folder that contains `manifest.json`.
+Install the Web Store version, or enable Developer mode and load the source folder that contains `manifest.json`.
 
-**Write article / Import is disabled.**
+**Write to X draft is disabled.**
 Load or edit a Markdown draft first, open an X Article tab, then click **Check article**.
 
-**Images stay as text.**
-xPoster could not read the image file. For local files, choose the folder that contains the image. For web images, allow the image website when Chrome asks.
+**Images stay as links.**
+Local images need a selected image folder. Web images need to be publicly downloadable after Chrome grants the image-site permission.
 
-**The article looks wrong after import.**
-Do not publish yet. Edit directly in X or reset the draft and retry. xPoster intentionally leaves the final publish decision to you.
+**The imported article looks wrong.**
+Do not publish yet. Edit directly in X or reset the draft and retry from the saved Markdown record.
 
 **X changed its editor and import stopped working.**
 Open an issue with your Chrome version, xPoster version, and the diagnostics JSON from the toolbar popup.
@@ -142,7 +142,7 @@ Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Support
 
-xPoster is free and open source. If it saves you time and you want to support ongoing maintenance, you can scan the Buy Me a Coffee QR code below. This is completely optional; feedback, issues, and stars also help the project.
+xPoster is free and open source. If it saves you time and you want to support ongoing maintenance, you can scan the Buy Me a Coffee QR code below. This is optional; feedback, issues, and stars also help.
 
 <img src="docs/images/buy-me-a-coffee-qr.png" alt="Buy Me a Coffee QR code" width="220">
 
