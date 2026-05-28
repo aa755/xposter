@@ -7,6 +7,8 @@
   const DROP_HINT_ID = "__xposter_drop_hint__";
   const ARTICLE_EXPORT_ID = "__xposter_article_export__";
   const ARTICLE_EXPORT_STYLE_ID = "__xposter_article_export_style__";
+  const SUCCESS_CELEBRATION_ID = "__xposter_success_celebration__";
+  const SUCCESS_CELEBRATION_STYLE_ID = "__xposter_success_celebration_style__";
   const SIDEPANEL_DRAFT_STORAGE_KEY = "xposter_sidepanel_draft";
   const PENDING_ARTICLE_IMPORT_STORAGE_KEY = "xposter_pending_article_import";
   const ARTICLE_EXPORT_SETTINGS_STORAGE_KEY = "xposter_article_export_settings";
@@ -492,6 +494,10 @@
     showStatus(text, level, timeout);
   }
 
+  function prefersReducedMotion() {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
+  }
+
   function throwIfImportCancelled() {
     if (!state.cancelRequested) return;
     const error = new Error("Writing stopped by user.");
@@ -737,6 +743,127 @@
       }
     `;
     document.head.appendChild(style);
+  }
+
+  function injectSuccessCelebrationStyle() {
+    if (document.getElementById(SUCCESS_CELEBRATION_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = SUCCESS_CELEBRATION_STYLE_ID;
+    style.textContent = `
+      #${SUCCESS_CELEBRATION_ID} {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483646;
+        pointer-events: none;
+        overflow: hidden;
+        contain: layout paint style;
+      }
+      #${SUCCESS_CELEBRATION_ID} .__xposter_success_mark {
+        position: absolute;
+        left: 50%;
+        top: 24%;
+        width: 88px;
+        height: 88px;
+        border: 1px solid rgba(29, 155, 240, 0.28);
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.92);
+        color: #00ba7c;
+        box-shadow: 0 18px 42px rgba(15, 20, 25, 0.16);
+        transform: translate3d(-50%, -50%, 0) scale(0.92);
+        animation: __xposter_success_mark 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      #${SUCCESS_CELEBRATION_ID} .__xposter_success_mark svg {
+        width: 38px;
+        height: 38px;
+        fill: currentColor;
+      }
+      #${SUCCESS_CELEBRATION_ID} .__xposter_success_piece {
+        position: absolute;
+        left: 50%;
+        top: 24%;
+        width: 7px;
+        height: 13px;
+        border-radius: 2px;
+        background: var(--__xposter-success-piece, #1d9bf0);
+        opacity: 0;
+        transform: translate3d(-50%, -50%, 0) rotate(var(--__xposter-success-angle, 0deg));
+        animation: __xposter_success_piece 760ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        animation-delay: var(--__xposter-success-delay, 0ms);
+      }
+      @keyframes __xposter_success_mark {
+        0% { opacity: 0; transform: translate3d(-50%, -50%, 0) scale(0.92); }
+        28% { opacity: 1; transform: translate3d(-50%, -50%, 0) scale(1); }
+        100% { opacity: 0; transform: translate3d(-50%, -72%, 0) scale(0.98); }
+      }
+      @keyframes __xposter_success_piece {
+        0% {
+          opacity: 0;
+          transform: translate3d(-50%, -50%, 0) rotate(var(--__xposter-success-angle, 0deg)) scale(0.72);
+        }
+        16% { opacity: 1; }
+        100% {
+          opacity: 0;
+          transform:
+            translate3d(
+              calc(-50% + var(--__xposter-success-x, 0px)),
+              calc(-50% + var(--__xposter-success-y, -120px)),
+              0
+            )
+            rotate(calc(var(--__xposter-success-angle, 0deg) + 120deg))
+            scale(0.92);
+        }
+      }
+      @media (prefers-color-scheme: dark) {
+        #${SUCCESS_CELEBRATION_ID} .__xposter_success_mark {
+          background: rgba(22, 24, 28, 0.92);
+          border-color: rgba(102, 169, 216, 0.34);
+          box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #${SUCCESS_CELEBRATION_ID} .__xposter_success_mark {
+          opacity: 1;
+          transform: translate3d(-50%, -50%, 0) scale(1);
+          animation: none;
+        }
+        #${SUCCESS_CELEBRATION_ID} .__xposter_success_piece {
+          display: none;
+          animation: none;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function showSuccessCelebration({ colors = [] } = {}) {
+    injectSuccessCelebrationStyle();
+    document.getElementById(SUCCESS_CELEBRATION_ID)?.remove();
+    const root = document.createElement("div");
+    root.id = SUCCESS_CELEBRATION_ID;
+    root.setAttribute("aria-hidden", "true");
+    const mark = document.createElement("div");
+    mark.className = "__xposter_success_mark";
+    mark.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.4 16.6 4.8 12l-1.4 1.4 6 6L21 7.8 19.6 6.4 9.4 16.6Z"/></svg>';
+    root.appendChild(mark);
+    if (!prefersReducedMotion()) {
+      const palette = colors.length ? colors : ["#0f1419", "#536471", "#1d9bf0", "#00ba7c", "#cfd9de"];
+      for (let index = 0; index < 20; index += 1) {
+        const piece = document.createElement("span");
+        const side = index % 2 === 0 ? -1 : 1;
+        const distance = 76 + (index % 5) * 18;
+        piece.className = "__xposter_success_piece";
+        piece.style.setProperty("--__xposter-success-piece", palette[index % palette.length]);
+        piece.style.setProperty("--__xposter-success-x", `${side * (distance + index * 2)}px`);
+        piece.style.setProperty("--__xposter-success-y", `${-88 - (index % 6) * 14}px`);
+        piece.style.setProperty("--__xposter-success-angle", `${index * 23}deg`);
+        piece.style.setProperty("--__xposter-success-delay", `${index * 11}ms`);
+        root.appendChild(piece);
+      }
+    }
+    document.body.appendChild(root);
+    window.setTimeout(() => root.remove(), 1100);
   }
 
   function broadcast(payload) {
@@ -3560,6 +3687,11 @@
     }
     if (message?.type === "xposter:cancel-import") {
       sendResponse(cancelActiveImport());
+      return false;
+    }
+    if (message?.type === "xposter:success-celebration") {
+      showSuccessCelebration({ colors: Array.isArray(message.colors) ? message.colors : [] });
+      sendResponse({ ok: true });
       return false;
     }
     if (message?.type === "xposter:analyze-markdown") {

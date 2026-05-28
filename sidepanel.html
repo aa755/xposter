@@ -50,22 +50,20 @@
         </div>
         <div class="draft-editor-shell">
           <div class="draft-editor-toolbar" id="draftEditorToolbar" aria-label="Markdown editor tools" data-i18n-aria-label="Markdown editor tools">
-            <div class="draft-editor-modes" role="group" aria-label="Editor mode" data-i18n-aria-label="Editor mode">
-              <button type="button" data-editor-mode="edit" aria-pressed="true" data-i18n="Write">Write</button>
-              <button type="button" data-editor-mode="read" aria-pressed="false" data-i18n="Read">Read</button>
-              <button type="button" data-editor-mode="check" aria-pressed="false" data-i18n="Check">Check</button>
-            </div>
             <div class="draft-editor-formatting" role="group" aria-label="Markdown formatting" data-i18n-aria-label="Markdown formatting">
               <button type="button" data-editor-command="bold" title="Bold" aria-label="Bold" data-i18n-title="Bold" data-i18n-aria-label="Bold">B</button>
               <button type="button" data-editor-command="italic" title="Italic" aria-label="Italic" data-i18n-title="Italic" data-i18n-aria-label="Italic"><span>I</span></button>
               <button type="button" data-editor-command="heading" title="Heading" aria-label="Heading" data-i18n-title="Heading" data-i18n-aria-label="Heading">#</button>
               <button type="button" data-editor-command="code" title="Code" aria-label="Code" data-i18n-title="Code" data-i18n-aria-label="Code">`</button>
-              <button type="button" data-editor-command="link" title="Link" aria-label="Link" data-i18n-title="Link" data-i18n-aria-label="Link">Link</button>
-              <button type="button" data-editor-command="image" title="Image" aria-label="Image" data-i18n-title="Image" data-i18n-aria-label="Image">Image</button>
-              <button type="button" data-editor-command="table" title="Table" aria-label="Table" data-i18n-title="Table" data-i18n-aria-label="Table">Table</button>
+              <button type="button" data-editor-command="link" title="Link" aria-label="Link" data-i18n-title="Link" data-i18n-aria-label="Link"><svg class="editor-command-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1L11 5"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/></svg></button>
+              <button type="button" data-editor-command="image" title="Image" aria-label="Image" data-i18n-title="Image" data-i18n-aria-label="Image"><svg class="editor-command-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="m8 15 3-3 2 2 3-4 4 5"/><path d="M8.5 9h.01"/></svg></button>
+              <button type="button" data-editor-command="table" title="Table" aria-label="Table" data-i18n-title="Table" data-i18n-aria-label="Table"><svg class="editor-command-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M4 10h16"/><path d="M4 15h16"/><path d="M10 5v14"/><path d="M16 5v14"/></svg></button>
             </div>
           </div>
-          <textarea id="markdown" spellcheck="false" placeholder="Paste Markdown here, choose a file, or drop .md files." data-i18n-placeholder="Paste Markdown here, choose a file, or drop .md files."></textarea>
+          <div class="draft-editor-input-wrap">
+            <pre class="draft-syntax-highlight" id="draftSyntaxHighlight" aria-hidden="true"></pre>
+            <textarea id="markdown" spellcheck="false" placeholder="Paste Markdown here, choose a file, or drop .md files." data-i18n-placeholder="Paste Markdown here, choose a file, or drop .md files."></textarea>
+          </div>
           <div class="draft-inline-preview" id="draftInlinePreview" aria-label="Markdown preview" data-i18n-aria-label="Markdown preview" hidden>
             <div class="draft-inline-preview-head" id="draftInlinePreviewHead">
               <strong id="draftInlinePreviewTitle">No title yet</strong>
@@ -77,7 +75,12 @@
           </div>
           <div class="draft-editor-status" id="draftEditorStatus" aria-live="polite">
             <span id="draftEditorStats">0 chars · 0 images</span>
-            <span id="draftEditorModeLabel">Edit</span>
+            <button class="draft-editor-mode-toggle" id="draftEditorModeToggle" type="button" data-editor-mode-toggle aria-label="Read" title="Read">
+              <svg class="draft-mode-icon draft-mode-icon-read" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.2c4.4 0 7.6 3.3 9.1 6.8-1.5 3.5-4.7 6.8-9.1 6.8S4.4 15.5 2.9 12C4.4 8.5 7.6 5.2 12 5.2Zm0 2C8.7 7.2 6.2 9.4 5.1 12c1.1 2.6 3.6 4.8 6.9 4.8s5.8-2.2 6.9-4.8C17.8 9.4 15.3 7.2 12 7.2Zm0 1.8a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
+              <svg class="draft-mode-icon draft-mode-icon-write" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.8 4.2a2.9 2.9 0 0 1 4.1 4.1L9.7 18.5 5 19l.5-4.7L15.8 4.2Zm1.4 1.4L7.4 15.4l-.2 1.4 1.4-.2 9.8-9.8a.9.9 0 0 0-1.2-1.2Z"/></svg>
+              <span data-mode-label="read" data-i18n="Read">Read</span>
+              <span data-mode-label="write" data-i18n="Write">Write</span>
+            </button>
           </div>
           <div class="draft-media-alert" id="draftMediaAlert" role="alert" aria-live="assertive" hidden>
             <strong id="draftMediaAlertTitle" data-i18n="Too many images">Too many images</strong>
@@ -879,7 +882,7 @@
               <input type="checkbox" id="confettiOption" checked />
               <span>
                 <strong data-i18n="Celebration animation">Celebration animation</strong>
-                <em data-i18n="Show a brief confetti burst when X reports a completed write.">Show a brief confetti burst when X reports a completed write.</em>
+                <em data-i18n="Show a brief celebration on the X page when X reports a completed write.">Show a brief celebration on the X page when X reports a completed write.</em>
               </span>
             </label>
             <label>
@@ -952,7 +955,6 @@
 
     <script src="src/i18n.js"></script>
     <script src="src/shared.js"></script>
-    <script src="vendor/canvas-confetti.browser.min.js"></script>
     <script src="vendor/minigfm.min.js"></script>
     <script src="sidepanel.js"></script>
   </body>

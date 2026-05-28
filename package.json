@@ -1,6 +1,6 @@
 {
   "name": "xposter",
-  "version": "1.42.17",
+  "version": "1.42.19",
   "description": "Chrome MV3 extension for importing Markdown drafts into X Articles.",
   "license": "MIT",
   "type": "commonjs",

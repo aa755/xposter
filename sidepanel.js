@@ -6,13 +6,15 @@
     markdown: document.getElementById("markdown"),
     draftEditorToolbar: document.getElementById("draftEditorToolbar"),
     draftEditorStatus: document.getElementById("draftEditorStatus"),
+    draftEditorModeToggle: document.getElementById("draftEditorModeToggle"),
     draftEditorStats: document.getElementById("draftEditorStats"),
-    draftEditorModeLabel: document.getElementById("draftEditorModeLabel"),
     draftInlinePreview: document.getElementById("draftInlinePreview"),
     draftInlinePreviewHead: document.getElementById("draftInlinePreviewHead"),
     draftInlinePreviewTitle: document.getElementById("draftInlinePreviewTitle"),
     draftInlinePreviewMeta: document.getElementById("draftInlinePreviewMeta"),
     draftInlinePreviewBody: document.getElementById("draftInlinePreviewBody"),
+    draftSyntaxHighlight: document.getElementById("draftSyntaxHighlight"),
+    draftEditorInputWrap: document.querySelector(".draft-editor-input-wrap"),
     draftEditorShell: document.querySelector(".draft-editor-shell"),
     pageState: document.getElementById("pageState"),
     advancedDiagnostics: document.getElementById("advancedDiagnostics"),
@@ -171,10 +173,14 @@
   const MARKDOWN_LOAD_ERROR_TITLE = "Could not load Markdown";
   const MARKDOWN_LOAD_ERROR_DETAIL = "Try a .md, .markdown, .txt file, or plain Markdown text.";
   const NO_NEW_DRAFTS_DETAIL = "No new Markdown drafts were added.";
-  const DRAFT_EDITOR_MODES = new Set(["edit", "read", "check"]);
+  const DRAFT_EDITOR_MODES = new Set(["edit", "read"]);
   const DRAFT_SAVE_DELAY_MS = 220;
   const DRAFT_ANALYZE_DELAY_MS = 140;
   const RECORD_SEARCH_DELAY_MS = 120;
+  const STARTUP_DRAFT_ANALYZE_DELAY_MS = 260;
+  const STARTUP_IDLE_TIMEOUT_MS = 650;
+  const STARTUP_PAGE_STATE_TIMEOUT_MS = 900;
+  const SYNTAX_HIGHLIGHT_DETAIL_LIMIT = 60000;
   const THEME_MODES = new Set(["system", "light", "dark"]);
   const SUCCESS_SOUND_VOLUME = 1;
   const SUCCESS_SOUND_PRESETS = {
@@ -202,7 +208,7 @@
     }
   };
   const SUCCESS_SOUND_STYLES = new Set(Object.keys(SUCCESS_SOUND_PRESETS));
-  const SUCCESS_CONFETTI_COLORS = ["#0f1419", "#536471", "#1d9bf0", "#00ba7c", "#cfd9de"];
+  const SUCCESS_CELEBRATION_COLORS = ["#0f1419", "#536471", "#1d9bf0", "#00ba7c", "#cfd9de"];
   const EXTENSION_VERSION =
     typeof chrome !== "undefined" && chrome.runtime?.getManifest
       ? chrome.runtime.getManifest().version
@@ -232,6 +238,9 @@
   let draftSaveTimer = null;
   let draftAnalyzeTimer = null;
   let recordSearchTimer = null;
+  let recordHistoryRestored = false;
+  let recordHistoryRestorePromise = null;
+  let pendingRecordHistoryEntries = [];
   let suppressNextTypedHistory = false;
   let activeWriteQueueItemId = null;
   let queueMotionTimer = null;
@@ -242,7 +251,6 @@
   let successFeedbackOptions = { confetti: true, sound: true, soundStyle: "soft" };
   let articleExportOptions = { enabled: true, mode: "copy" };
   let successAudioContext = null;
-  let successConfetti = null;
   let lastSuccessFeedbackKey = "";
   let draftEditorMode = "edit";
   let miniGfmRenderer = null;
@@ -487,6 +495,7 @@
       "Markdown loaded": "草稿就绪",
       "Could not load Markdown": "无法载入 Markdown",
       "Ready for Markdown": "等待 Markdown",
+      "Ready to write.": "可以写入。",
       "Draft added": "草稿已添加",
       "No new Markdown drafts were added.": "没有新增 Markdown 草稿。",
       "No Markdown content": "没有 Markdown 内容",
@@ -661,7 +670,7 @@
       "Success feedback": "成功反馈",
       "Choose the small celebration shown after a successful write.": "选择写入成功后显示的小反馈。",
       "Celebration animation": "庆祝动画",
-      "Show a brief confetti burst when X reports a completed write.": "当 X 返回写入完成时，显示一次短暂彩纸动画。",
+      "Show a brief celebration on the X page when X reports a completed write.": "当 X 返回写入完成时，在 X 页面显示一次短暂庆祝动画。",
       "Completion sound": "完成音效",
       "Play a short local chime after a successful write.": "写入成功后播放一声本地短提示音。",
       "Sound style": "音效风格",
@@ -898,6 +907,7 @@
       "Check found blockers": "检查发现阻断项",
       Saved: "已保存",
       "Ready to write": "可写入",
+      "Ready to write.": "可以写入。",
       "Checked": "已检查",
       Draft: "草稿",
       "Image check": "图片检查",
@@ -1595,7 +1605,7 @@
       "Success feedback": "成功反馈",
       "Choose the small celebration shown after a successful write.": "选择写入成功后显示的小反馈。",
       "Celebration animation": "庆祝动画",
-      "Show a brief confetti burst when X reports a completed write.": "当 X 返回写入完成时，显示一次短暂彩纸动画。",
+      "Show a brief celebration on the X page when X reports a completed write.": "当 X 返回写入完成时，在 X 页面显示一次短暂庆祝动画。",
       "Completion sound": "完成音效",
       "Play a short local chime after a successful write.": "写入成功后播放一声本地短提示音。",
       "Sound style": "音效风格",
@@ -1910,12 +1920,6 @@
     return els.markdown?.value || "";
   }
 
-  function draftEditorModeLabel(mode = draftEditorMode) {
-    if (mode === "read") return "Read";
-    if (mode === "check") return "Check";
-    return "Write";
-  }
-
   function miniGfm() {
     if (miniGfmRenderer) return miniGfmRenderer;
     if (typeof window.MiniGFM !== "function") return null;
@@ -1993,24 +1997,148 @@
     return template.innerHTML;
   }
 
-  function updateDraftEditorStatus() {
+  function updateDraftEditorStatus({ parse = true } = {}) {
     const text = draftText();
-    const parsed = latestParsed || (text.trim() ? parseDraftMarkdown(text) : null);
-    const counts = parsed?.segments?.length ? shared.segmentCounts(parsed.segments) : shared.segmentCounts([]);
+    let counts = shared.segmentCounts([]);
+    if (parse && text.trim()) {
+      try {
+        counts = shared.segmentCounts(parseDraftMarkdown(text).segments);
+      } catch {
+        counts = latestCounts || counts;
+      }
+    }
     if (els.draftEditorStats) {
       const parts = [formatCompactUnit(text.length, "char", "chars", "字符")];
       if (counts.image) parts.push(formatCompactUnit(counts.image, "image", "images", "图"));
       if (counts.table) parts.push(formatCompactUnit(counts.table, "table", "tables", "表"));
       setLocalizedText(els.draftEditorStats, parts.join(" · "));
     }
-    if (els.draftEditorModeLabel) setLocalizedText(els.draftEditorModeLabel, draftEditorModeLabel());
   }
 
-  function setDraftText(markdown) {
+  function updateDraftEditorDensity(text = draftText()) {
+    if (!els.draftEditorShell) return;
+    const value = String(text || "");
+    const meaningfulLines = value.split(/\r\n?|\n/).filter((line) => line.trim()).length;
+    const hasRichBlocks = /(^|\n)\s*(```|!\[|#{1,6}\s|\|.+\||[-*+]\s+|\d+\.\s+)/.test(value);
+    const isCompact = !value.trim() || (value.length < 420 && meaningfulLines <= 8 && !hasRichBlocks);
+    els.draftEditorShell.dataset.density = isCompact ? "compact" : "roomy";
+  }
+
+  function draftSyntaxSpan(className, text) {
+    return `<span class="${className}">${shared.escapeHtml(text)}</span>`;
+  }
+
+  function plainDraftSyntaxText(text = "") {
+    return String(text || "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+  }
+
+  function highlightInlineMarkdownSyntax(text = "") {
+    const tokens = [];
+    const token = (className, value) => {
+      const key = `\u0000${tokens.length}\u0000`;
+      tokens.push(draftSyntaxSpan(className, value));
+      return key;
+    };
+    const wrapToken = (open, className, value, close = open) =>
+      `${token("draft-token-marker", open)}${token(className, plainDraftSyntaxText(value))}${token("draft-token-marker", close)}`;
+    const escaped = shared
+      .escapeHtml(String(text || ""))
+      .replace(/!\[([^\]\n]*)\]\(([^)\n]+)\)/g, (_, alt, url) =>
+        [
+          token("draft-token-marker", "!["),
+          token("draft-token-image", plainDraftSyntaxText(alt)),
+          token("draft-token-marker", "]("),
+          token("draft-token-url", plainDraftSyntaxText(url)),
+          token("draft-token-marker", ")")
+        ].join("")
+      )
+      .replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/g, (_, label, url) =>
+        [
+          token("draft-token-marker", "["),
+          token("draft-token-link", plainDraftSyntaxText(label)),
+          token("draft-token-marker", "]("),
+          token("draft-token-url", plainDraftSyntaxText(url)),
+          token("draft-token-marker", ")")
+        ].join("")
+      )
+      .replace(/(`+)([^`\n]+)(\1)/g, (_, open, code, close) =>
+        wrapToken(open, "draft-token-code", code, close)
+      )
+      .replace(/(\*\*|__)(.+?)(\1)/g, (_, open, strong, close) =>
+        wrapToken(open, "draft-token-strong", strong, close)
+      )
+      .replace(/(^|[^\w*_])([*_])([^*_]+?)(\2)(?=$|[^\w*_])/g, (_, prefix, open, emphasis, close) =>
+        `${prefix}${wrapToken(open, "draft-token-emphasis", emphasis, close)}`
+      );
+    return tokens.reduce((html, value, index) => html.replace(`\u0000${index}\u0000`, value), escaped);
+  }
+
+  function highlightMarkdownLine(line = "", inCodeBlock = false) {
+    const value = String(line || "");
+    if (inCodeBlock) return draftSyntaxSpan("draft-token-code", value);
+    const heading = value.match(/^(\s{0,3})(#{1,6})(\s+)(.*)$/);
+    if (heading) {
+      return [
+        shared.escapeHtml(heading[1]),
+        draftSyntaxSpan("draft-token-marker", heading[2]),
+        shared.escapeHtml(heading[3]),
+        draftSyntaxSpan("draft-token-heading", heading[4])
+      ].join("");
+    }
+    const quote = value.match(/^(\s{0,3}>+\s?)(.*)$/);
+    if (quote) {
+      return `${draftSyntaxSpan("draft-token-blockquote", quote[1])}${highlightInlineMarkdownSyntax(quote[2])}`;
+    }
+    const list = value.match(/^(\s*(?:[-*+]|\d+[.)])\s+)(.*)$/);
+    if (list) {
+      return `${draftSyntaxSpan("draft-token-list", list[1])}${highlightInlineMarkdownSyntax(list[2])}`;
+    }
+    if (/^\s*\|.+\|\s*$/.test(value)) {
+      return draftSyntaxSpan("draft-token-table", value);
+    }
+    return highlightInlineMarkdownSyntax(value);
+  }
+
+  function renderDraftSyntaxHighlight(text = draftText()) {
+    if (!els.draftSyntaxHighlight) return;
+    const value = String(text || "");
+    if (value.length > SYNTAX_HIGHLIGHT_DETAIL_LIMIT) {
+      els.draftSyntaxHighlight.textContent = value;
+      syncDraftSyntaxScroll();
+      return;
+    }
+    const lines = value.replace(/\r\n?/g, "\n").split("\n");
+    let inCodeBlock = false;
+    const html = lines
+      .map((line) => {
+        const isFence = /^\s*```/.test(line);
+        const rendered = highlightMarkdownLine(line, inCodeBlock || isFence);
+        if (isFence) inCodeBlock = !inCodeBlock;
+        return rendered || " ";
+      })
+      .join("\n");
+    els.draftSyntaxHighlight.innerHTML = html;
+    syncDraftSyntaxScroll();
+  }
+
+  function syncDraftSyntaxScroll() {
+    if (!els.markdown || !els.draftSyntaxHighlight) return;
+    els.draftSyntaxHighlight.scrollTop = els.markdown.scrollTop;
+    els.draftSyntaxHighlight.scrollLeft = els.markdown.scrollLeft;
+  }
+
+  function setDraftText(markdown, { preview = true, parseStatus = true } = {}) {
     const text = String(markdown || "");
     if (els.markdown && els.markdown.value !== text) els.markdown.value = text;
-    updateDraftEditorStatus();
-    updateInlinePreview();
+    renderDraftSyntaxHighlight(text);
+    updateDraftEditorDensity(text);
+    updateDraftEditorStatus({ parse: parseStatus });
+    if (preview) updateInlinePreview();
   }
 
   function focusDraftTextEditor() {
@@ -2020,6 +2148,8 @@
   }
 
   function handleDraftEditorInput({ pasted = false } = {}) {
+    renderDraftSyntaxHighlight();
+    updateDraftEditorDensity();
     updateDraftEditorStatus();
     updateInlinePreview();
     scheduleSaveDraft();
@@ -2097,8 +2227,11 @@
     const isEdit = draftEditorMode === "edit";
     const isPreview = !isEdit;
     if (els.draftEditorShell) els.draftEditorShell.dataset.mode = draftEditorMode;
+    if (els.draftEditorInputWrap) {
+      els.draftEditorInputWrap.hidden = isPreview || queueModeActive();
+      els.draftEditorInputWrap.setAttribute("aria-hidden", isPreview || queueModeActive() ? "true" : "false");
+    }
     if (els.markdown) {
-      els.markdown.hidden = isPreview || queueModeActive();
       els.markdown.setAttribute("aria-hidden", isPreview || queueModeActive() ? "true" : "false");
       els.markdown.tabIndex = isPreview || queueModeActive() ? -1 : 0;
     }
@@ -2106,78 +2239,50 @@
       els.draftInlinePreview.hidden = !isPreview || queueModeActive();
       els.draftInlinePreview.setAttribute("aria-hidden", isPreview && !queueModeActive() ? "false" : "true");
     }
-    els.draftEditorToolbar?.querySelectorAll("[data-editor-mode]").forEach((button) => {
-      const pressed = button.dataset.editorMode === draftEditorMode;
-      button.setAttribute("aria-pressed", pressed ? "true" : "false");
-    });
+    updateDraftEditorModeToggle();
     els.draftEditorToolbar?.querySelectorAll("[data-editor-command]").forEach((button) => {
       button.disabled = !isEdit || queueModeActive();
     });
     updateDraftEditorStatus();
+    if (isEdit) renderDraftSyntaxHighlight();
     if (isPreview) updateInlinePreview();
+  }
+
+  function updateDraftEditorModeToggle() {
+    const button = els.draftEditorModeToggle;
+    if (!button) return;
+    const nextMode = draftEditorMode === "read" ? "edit" : "read";
+    button.dataset.nextMode = nextMode;
+    button.setAttribute("aria-pressed", draftEditorMode === "read" ? "true" : "false");
+    button.setAttribute("aria-label", localizeText(nextMode === "read" ? "Read" : "Write"));
+    button.title = localizeText(nextMode === "read" ? "Read" : "Write");
   }
 
   function updateInlinePreview(parsed = latestParsed, counts = latestCounts) {
     if (!els.draftInlinePreview) return;
-    const mode = draftEditorMode === "read" ? "read" : "check";
-    if (els.draftInlinePreview) els.draftInlinePreview.dataset.previewMode = mode;
+    if (els.draftInlinePreview) els.draftInlinePreview.dataset.previewMode = "read";
     const text = draftText();
     if (!text.trim()) {
-      if (els.draftInlinePreviewTitle) setLocalizedText(els.draftInlinePreviewTitle, mode === "read" ? "Reading preview" : "Publishing check");
-      if (els.draftInlinePreviewMeta) setLocalizedText(els.draftInlinePreviewMeta, mode === "read" ? "Paste Markdown to read it here." : "Paste Markdown to check conversion.");
+      if (els.draftInlinePreviewTitle) setLocalizedText(els.draftInlinePreviewTitle, "Reading preview");
+      if (els.draftInlinePreviewMeta) setLocalizedText(els.draftInlinePreviewMeta, "Paste Markdown to read it here.");
       if (els.draftInlinePreviewBody) {
-        els.draftInlinePreviewBody.innerHTML = `<p class="empty">${shared.escapeHtml(localizeText(mode === "read" ? "Reading preview appears here." : "Preview appears here."))}</p>`;
+        els.draftInlinePreviewBody.innerHTML = `<p class="empty">${shared.escapeHtml(localizeText("Reading preview appears here."))}</p>`;
       }
       translateDynamicDom(els.draftInlinePreview);
       return;
     }
     const safe = shared.escapeHtml;
-    if (mode === "read") {
-      const renderer = miniGfm();
-      const { protectedMarkdown, codeBlocks } = protectReadPreviewCodeBlocks(text);
-      if (els.draftInlinePreviewTitle) setLocalizedText(els.draftInlinePreviewTitle, "Reading preview");
-      if (els.draftInlinePreviewMeta) setLocalizedText(els.draftInlinePreviewMeta, [
-        formatCompactUnit(text.length, "char", "chars", "字符"),
-        formatCompactUnit((text.match(/^!\[/gm) || []).length, "image", "images", "图")
-      ].join(" · "));
-      if (els.draftInlinePreviewBody) {
-        els.draftInlinePreviewBody.innerHTML = renderer
-          ? sanitizePreviewHtml(restoreReadPreviewCodeBlocks(renderer.parse(protectedMarkdown), codeBlocks))
-          : `<pre class="draft-read-fallback">${safe(text)}</pre>`;
-      }
-      translateDynamicDom(els.draftInlinePreview);
-      return;
-    }
-    if (!parsed?.segments?.length) {
-      if (els.draftInlinePreviewTitle) setLocalizedText(els.draftInlinePreviewTitle, "Publishing check");
-      if (els.draftInlinePreviewMeta) setLocalizedText(els.draftInlinePreviewMeta, "Paste Markdown to check conversion.");
-      if (els.draftInlinePreviewBody) {
-        els.draftInlinePreviewBody.innerHTML = `<p class="empty">${safe(localizeText("No publishable blocks detected yet."))}</p>`;
-      }
-      translateDynamicDom(els.draftInlinePreview);
-      return;
-    }
-    const derivedCounts = counts || shared.segmentCounts(parsed.segments);
-    const specialCount = (derivedCounts.tweet || 0) + (derivedCounts.code || 0) + (derivedCounts.divider || 0);
-    if (els.draftInlinePreviewTitle) {
-      setLocalizedText(els.draftInlinePreviewTitle, "Publishing check");
-    }
-    if (els.draftInlinePreviewMeta) {
-      els.draftInlinePreviewMeta.textContent = [
-        formatCompactUnit(derivedCounts.text || 0, "text block", "text blocks", "段"),
-        formatCompactUnit(derivedCounts.image || 0, "image", "images", "图"),
-        formatCompactUnit(derivedCounts.table || 0, "table", "tables", "表"),
-        `${specialCount} special block(s)`
-      ].join(" · ");
-    }
+    const renderer = miniGfm();
+    const { protectedMarkdown, codeBlocks } = protectReadPreviewCodeBlocks(text);
+    if (els.draftInlinePreviewTitle) setLocalizedText(els.draftInlinePreviewTitle, "Reading preview");
+    if (els.draftInlinePreviewMeta) setLocalizedText(els.draftInlinePreviewMeta, [
+      formatCompactUnit(text.length, "char", "chars", "字符"),
+      formatCompactUnit((text.match(/^!\[/gm) || []).length, "image", "images", "图")
+    ].join(" · "));
     if (els.draftInlinePreviewBody) {
-      const rows = parsed.segments.slice(0, 16).map((segment) => {
-        const kind = previewKindLabel(segment);
-        const value = previewSegmentText(segment);
-        return `<div class="preview-item"><span class="preview-kind">${safe(kind)}</span><span class="preview-text">${safe(value)}</span></div>`;
-      });
-      if (parsed.segments.length > 16) rows.push(`<p class="empty">${safe(`${parsed.segments.length - 16} more block(s) hidden in preview.`)}</p>`);
-      els.draftInlinePreviewBody.innerHTML = rows.join("") || `<p class="empty">${safe("No publishable blocks detected yet.")}</p>`;
+      els.draftInlinePreviewBody.innerHTML = renderer
+        ? sanitizePreviewHtml(restoreReadPreviewCodeBlocks(renderer.parse(protectedMarkdown), codeBlocks))
+        : `<pre class="draft-read-fallback">${safe(text)}</pre>`;
     }
     translateDynamicDom(els.draftInlinePreview);
   }
@@ -2200,7 +2305,8 @@
   function applyImportOptions(options = importOptions) {
     importOptions = normalizeImportOptions(options);
     syncImportOptionsControls();
-    if (latestParsed?.segments?.length || draftText().trim()) analyzeDraft();
+    if (latestParsed?.segments?.length) analyzeDraft();
+    else if (draftText().trim()) scheduleAnalyzeDraft(STARTUP_DRAFT_ANALYZE_DELAY_MS);
     else {
       syncRemoteImageAccessStatusFromDraft(null);
       updatePreflight();
@@ -2357,43 +2463,27 @@
     });
   }
 
-  function fireSuccessConfetti() {
-    if (!successFeedbackOptions.confetti || typeof window.confetti !== "function") return;
-    if (!successConfetti) {
-      const canvas = document.createElement("canvas");
-      canvas.className = "success-confetti-canvas";
-      canvas.setAttribute("aria-hidden", "true");
-      document.body.appendChild(canvas);
-      successConfetti = window.confetti.create(canvas, {
-        resize: true,
-        useWorker: false
-      });
-    }
-    const base = {
-      particleCount: 28,
-      spread: 54,
-      startVelocity: 28,
-      ticks: 120,
-      gravity: 0.86,
-      scalar: 0.74,
-      zIndex: 120,
-      disableForReducedMotion: true,
-      colors: SUCCESS_CONFETTI_COLORS
-    };
-    successConfetti({ ...base, angle: 64, origin: { x: 0.22, y: 0.18 } });
-    successConfetti({ ...base, angle: 116, origin: { x: 0.78, y: 0.18 } });
+  async function requestPageSuccessCelebration(summary = null) {
+    if (!successFeedbackOptions.confetti) return;
+    await sendToActiveTab({
+      type: "xposter:success-celebration",
+      summary: {
+        elapsedMs: Number(summary?.elapsedMs || 0),
+        warnings: Number(summary?.mediaWarnings?.total || 0) + Number(summary?.main?.imgFail || 0)
+      },
+      colors: SUCCESS_CELEBRATION_COLORS
+    }).catch(() => null);
   }
 
   function triggerSuccessFeedback(summary = null) {
     const key = String(latestProgress?.startedAt || summary?.elapsedMs || Date.now());
     if (key && key === lastSuccessFeedbackKey) return;
     lastSuccessFeedbackKey = key;
-    if (successFeedbackOptions.confetti) fireSuccessConfetti();
+    if (successFeedbackOptions.confetti) void requestPageSuccessCelebration(summary);
     if (successFeedbackOptions.sound) void playSuccessSound();
   }
 
   async function previewSuccessFeedback() {
-    if (successFeedbackOptions.confetti) fireSuccessConfetti();
     if (successFeedbackOptions.sound) await playSuccessSound();
   }
 
@@ -2860,6 +2950,15 @@
     document.body.dataset.languagePreference = i18n?.preference?.() || currentLanguage;
   }
 
+  function translateVisibleWorkspace() {
+    translateDynamicDom(document.querySelector(".topbar") || document.body);
+    translateDynamicDom(document.querySelector(".tabs") || document.body);
+    document.querySelectorAll(".panel.active").forEach((panel) => translateDynamicDom(panel));
+    document.documentElement.lang = i18n?.htmlLang?.(currentLanguage) || (currentLanguage === "zh" ? "zh-CN" : "en");
+    document.body.dataset.language = currentLanguage;
+    document.body.dataset.languagePreference = i18n?.preference?.() || currentLanguage;
+  }
+
   function localizeText(text) {
     const source = String(text || "");
     if (!i18n) return translateText(source);
@@ -2870,6 +2969,13 @@
   function localizeInterpolated(key, values = {}) {
     if (i18n) return i18n.t(key, values);
     return translateText(String(key || "").replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? "")));
+  }
+
+  function runWhenIdle(callback, timeout = STARTUP_IDLE_TIMEOUT_MS) {
+    if (typeof window.requestIdleCallback === "function") {
+      return window.requestIdleCallback(callback, { timeout });
+    }
+    return window.setTimeout(callback, 0);
   }
 
   function populateLanguageSelect() {
@@ -2926,11 +3032,11 @@
     } else {
       currentLanguage = preference === "zh" ? "zh" : "en";
     }
-    translateDynamicDom();
+    translateVisibleWorkspace();
     populateLanguageSelect();
     updateDraftBrief();
     updateDraftEditorStatus();
-    renderRecordHistory();
+    if (recordHistoryRestored || els.recordsPanel?.classList.contains("active")) renderRecordHistory();
     if (persist && hasChromeApi()) {
       chrome.storage.local.set({ [STORAGE_LANGUAGE]: i18n?.preference?.() || currentLanguage });
     }
@@ -3184,15 +3290,24 @@
     const count = Number(value || 0);
     if (!Number.isFinite(count)) return "0";
     const abs = Math.abs(count);
+    if (isChineseLanguage()) {
+      const tenThousandUnit = currentLanguage === "zh-TW" ? "萬" : "万";
+      if (zhTenThousand && abs >= 10000) return formatCompactNumber(count / 10000, tenThousandUnit);
+      return new Intl.NumberFormat(currentLanguage === "zh-TW" ? "zh-Hant" : "zh-Hans").format(count);
+    }
     const format = (divisor, unit) => {
       const value = count / divisor;
       const rounded = value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
       return `${String(rounded).replace(/\.0$/, "")}${unit}`;
     };
-    if (isChineseLanguage() && zhTenThousand && abs >= 10000) return format(10000, "w");
-    if (abs >= 1000000) return format(1000000, isChineseLanguage() ? "m" : "M");
-    if (abs >= 1000) return format(1000, isChineseLanguage() ? "k" : "K");
+    if (abs >= 1000000) return format(1000000, "M");
+    if (abs >= 1000) return format(1000, "K");
     return String(count);
+  }
+
+  function formatCompactNumber(value, unit) {
+    const rounded = Math.abs(value) >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
+    return `${String(rounded).replace(/\.0$/, "")}${unit}`;
   }
 
   function formatCompactUnit(count, enSingular, enPlural, zhUnit, options = {}) {
@@ -3337,6 +3452,7 @@
   }
 
   function rememberDraftHistory(source = "typed", extra = {}) {
+    void ensureRecordHistoryRestored();
     const markdown = draftText();
     if (!markdown.trim() || !latestParsed?.segments?.length) return null;
     const { forceNew = false, ...details } = extra || {};
@@ -3549,12 +3665,17 @@
 
   function syncDraftSurface() {
     const hasQueue = queueModeActive();
+    if (els.draftPanel) els.draftPanel.dataset.queueMode = hasQueue ? "true" : "false";
     if (els.draftQueue) els.draftQueue.hidden = !hasQueue;
+    if (els.draftEditorShell) els.draftEditorShell.hidden = hasQueue;
     if (els.draftEditorToolbar) els.draftEditorToolbar.hidden = hasQueue;
     if (els.draftEditorStatus) els.draftEditorStatus.hidden = hasQueue;
     if (hasQueue) {
+      if (els.draftEditorInputWrap) {
+        els.draftEditorInputWrap.hidden = true;
+        els.draftEditorInputWrap.setAttribute("aria-hidden", "true");
+      }
       if (els.markdown) {
-        els.markdown.hidden = true;
         els.markdown.setAttribute("aria-hidden", "true");
         els.markdown.tabIndex = -1;
       }
@@ -3565,8 +3686,24 @@
     } else {
       setDraftEditorMode(draftEditorMode);
     }
-    updateDraftEditorStatus();
+    updateDraftEditorStatus({ parse: false });
     updateDraftBrief();
+  }
+
+  function restoreSingleDraftMarkdown(markdown) {
+    const text = String(markdown || "");
+    activeQueueItemId = null;
+    draftQueue = [];
+    setDraftText(text, { preview: false, parseStatus: false });
+    saveDraft();
+    syncDraftSurface();
+    updateWriteButton();
+    if (text.trim()) {
+      setDraftDropStatus("Markdown loaded", draftReadyDetail(text.length), "done");
+      scheduleAnalyzeDraft(STARTUP_DRAFT_ANALYZE_DELAY_MS);
+      return;
+    }
+    analyzeDraft();
   }
 
   function setSingleDraftMarkdown(markdown, { source = "typed", fileName = null, statusTitle = "Markdown loaded", logMessage = "", remember = true } = {}) {
@@ -6036,7 +6173,7 @@
     syncRecordPanel();
   }
 
-  function syncRecordPanel() {
+  function syncRecordPanel({ translate = els.recordsPanel?.classList.contains("active") } = {}) {
     if (!els.recordsPanel) return;
     const nodes = [els.recordHistory, els.runSummary, els.evidenceDetails, els.activityPanel].filter(Boolean);
     for (const node of nodes) {
@@ -6047,11 +6184,11 @@
     }
     const hasRecord = recordHistory.length || nodes.some((node) => !node.hidden);
     if (els.recordsEmpty) els.recordsEmpty.hidden = hasRecord;
-    translateDynamicDom(els.recordsPanel);
+    if (translate) translateDynamicDom(els.recordsPanel);
   }
 
   function syncPanelLayout() {
-    syncRecordPanel();
+    syncRecordPanel({ translate: false });
   }
 
   function updateRecoveryPanel(checks = null, gate = null) {
@@ -6253,6 +6390,12 @@
       }
       panel.classList.toggle("active", isActive);
     });
+    document.querySelectorAll(`.panel[data-panel="${CSS.escape(target)}"]`).forEach((panel) => translateDynamicDom(panel));
+    if (target === "records") {
+      void ensureRecordHistoryRestored({ render: true }).then(() => {
+        syncRecordPanel({ translate: true });
+      });
+    }
   }
 
   function prefersReducedMotion() {
@@ -7039,18 +7182,13 @@
       const activeItem = draftQueue.find((item) => item.id === activeQueueItemId) || draftQueue[0];
       suppressNextTypedHistory = true;
       window.clearTimeout(draftInputHistoryTimer);
-      setDraftText(activeItem?.markdown || "");
-      analyzeDraft();
+      setDraftText(activeItem?.markdown || "", { preview: false });
+      scheduleAnalyzeDraft(STARTUP_DRAFT_ANALYZE_DELAY_MS);
       renderDraftQueue();
       return;
     }
     if (restored.trim()) {
-      setSingleDraftMarkdown(restored, {
-        source: "restored",
-        statusTitle: "Markdown loaded",
-        logMessage: "",
-        remember: false
-      });
+      restoreSingleDraftMarkdown(restored);
       return;
     }
     setDraftText("");
@@ -7218,6 +7356,16 @@
     if (!evidence) return;
     const previous = currentRecord(evidence.id) || (evidence.kind === "draft-loaded" ? currentDraftRecord(evidence.draftRecordId) : null);
     const entry = normalizeRecordHistoryEntry(evidence, previous);
+    if (!recordHistoryRestored) {
+      pendingRecordHistoryEntries = [entry, ...pendingRecordHistoryEntries.filter((item) => item.id !== entry.id)].slice(0, MAX_RECORD_HISTORY);
+      recordHistory = [entry, ...recordHistory.filter((item) => item.id !== entry.id)].slice(0, MAX_RECORD_HISTORY);
+      void ensureRecordHistoryRestored({ render: false }).then(() => {
+        persistRecordHistory();
+        if (els.recordsPanel?.classList.contains("active")) renderRecordHistory();
+      });
+      renderRecordHistory();
+      return;
+    }
     recordHistory = [entry, ...recordHistory.filter((item) => item.id !== entry.id)].slice(0, MAX_RECORD_HISTORY);
     persistRecordHistory();
     renderRecordHistory();
@@ -7566,23 +7714,61 @@
     Promise.resolve(chrome.storage.local.set({ [STORAGE_RECORD_HISTORY]: recordHistory.map(recordStorageEntry) })).catch(() => {});
   }
 
-  async function restoreRecordHistory() {
+  function syncLatestEvidenceRecord() {
+    if (!latestEvidence) return;
+    setEvidenceRecordMeta(latestEvidence.kind, latestEvidence.capturedAt);
+    els.evidenceText.textContent = JSON.stringify(latestEvidence, jsonSafeReplacer, 2);
+    els.copyEvidence.disabled = false;
+  }
+
+  async function restoreRecordHistory({ render = true } = {}) {
     if (!hasChromeApi()) {
-      renderRecordHistory();
-      return;
+      if (render) renderRecordHistory();
+      recordHistoryRestored = true;
+      return recordHistory;
     }
     const stored = await chrome.storage.local.get(STORAGE_RECORD_HISTORY).catch(() => ({}));
-    recordHistory = Array.isArray(stored[STORAGE_RECORD_HISTORY])
+    const storedHistory = Array.isArray(stored[STORAGE_RECORD_HISTORY])
       ? stored[STORAGE_RECORD_HISTORY].slice(0, MAX_RECORD_HISTORY).map(normalizeStoredRecordHistoryEntry)
       : [];
+    const pending = pendingRecordHistoryEntries;
+    pendingRecordHistoryEntries = [];
+    recordHistory = [...pending, ...storedHistory.filter((item) => !pending.some((pendingItem) => pendingItem.id === item.id))]
+      .slice(0, MAX_RECORD_HISTORY);
     latestEvidence = recordHistory[0]?.evidence || latestEvidence;
-    if (latestEvidence) {
-      setEvidenceRecordMeta(latestEvidence.kind, latestEvidence.capturedAt);
-      els.evidenceText.textContent = JSON.stringify(latestEvidence, jsonSafeReplacer, 2);
-      els.copyEvidence.disabled = false;
+    recordHistoryRestored = true;
+    if (render) {
+      syncLatestEvidenceRecord();
+      renderRecordHistory();
+      updateProgressiveSections();
     }
-    renderRecordHistory();
-    updateProgressiveSections();
+    if (pending.length) persistRecordHistory();
+    return recordHistory;
+  }
+
+  function ensureRecordHistoryRestored({ render = false } = {}) {
+    if (recordHistoryRestored) {
+      if (render) {
+        syncLatestEvidenceRecord();
+        renderRecordHistory();
+      }
+      return Promise.resolve(recordHistory);
+    }
+    if (!recordHistoryRestorePromise) {
+      recordHistoryRestorePromise = restoreRecordHistory({ render }).catch(() => {
+        recordHistoryRestored = true;
+      });
+    }
+    return recordHistoryRestorePromise.then(() => {
+      if (render) renderRecordHistory();
+      return recordHistory;
+    });
+  }
+
+  function scheduleRecordHistoryRestore() {
+    runWhenIdle(() => {
+      void ensureRecordHistoryRestored({ render: false });
+    }, STARTUP_IDLE_TIMEOUT_MS);
   }
 
   function normalizeStoredRecordHistoryEntry(record) {
@@ -8374,15 +8560,14 @@
 
   els.markdown.addEventListener("input", () => handleDraftEditorInput());
   els.markdown.addEventListener("paste", () => handleDraftEditorInput({ pasted: true }));
+  els.markdown.addEventListener("scroll", syncDraftSyntaxScroll);
   els.draftEditorToolbar?.addEventListener("click", (event) => {
-    const modeButton = event.target.closest("button[data-editor-mode]");
-    if (modeButton) {
-      setDraftEditorMode(modeButton.dataset.editorMode);
-      return;
-    }
     const button = event.target.closest("button[data-editor-command]");
     if (!button) return;
     runDraftEditorCommand(button.dataset.editorCommand);
+  });
+  els.draftEditorModeToggle?.addEventListener("click", () => {
+    setDraftEditorMode(draftEditorMode === "read" ? "edit" : "read");
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flushDraftSave();
@@ -8501,17 +8686,21 @@
     });
   });
 
-  restoreDraftQueue().then(() => restoreDraft());
+  restoreDraftQueue().then(() => restoreDraft()).catch(() => analyzeDraft());
   restoreVaultState();
-  restoreRecordHistory();
-  restoreLiveResultChecks();
   restoreTheme();
   restoreImportOptions();
   restoreArticleExportOptions();
   restoreSuccessFeedbackOptions();
   installSystemThemeSync();
   updateLiveProgress();
-  refreshPageState();
   restoreLanguage();
+  scheduleRecordHistoryRestore();
+  runWhenIdle(() => {
+    void restoreLiveResultChecks();
+  }, STARTUP_IDLE_TIMEOUT_MS);
+  runWhenIdle(() => {
+    void refreshPageState();
+  }, STARTUP_PAGE_STATE_TIMEOUT_MS);
   window.setInterval(refreshPageState, 2500);
 })();

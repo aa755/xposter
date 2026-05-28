@@ -15,6 +15,8 @@ const manifestMessage = (value) => {
   if (!match) return value;
   return defaultMessages[match[1]]?.message || value;
 };
+const includesAll = (text, snippets) => snippets.every((snippet) => text.includes(snippet));
+const excludesAll = (text, snippets) => snippets.every((snippet) => !text.includes(snippet));
 
 assert.equal(manifest.manifest_version, 3, "manifest must be MV3");
 assert.equal(manifest.default_locale, "en", "manifest must declare a default locale");
@@ -51,8 +53,6 @@ const requiredFiles = [
   "docs/privacy.md",
   "docs/privacy.zh-CN.md",
   "docs/images/buy-me-a-coffee-qr.png",
-  "vendor/canvas-confetti.browser.min.js",
-  "vendor/canvas-confetti.LICENSE",
   "assets/icon-16.png",
   "assets/icon-32.png",
   "assets/icon-48.png",
@@ -689,19 +689,25 @@ assert.ok(
   "record and queue stats should use compact counts and avoid stretching record card actions"
 );
 assert.ok(
-  sidepanelText.includes('function draftEditorModeLabel') &&
-    sidepanelText.includes('if (counts.image) parts.push(formatCompactUnit(counts.image, "image", "images", "图"))') &&
+  sidepanelText.includes('if (counts.image) parts.push(formatCompactUnit(counts.image, "image", "images", "图"))') &&
     sidepanelText.includes('if (counts.table) parts.push(formatCompactUnit(counts.table, "table", "tables", "表"))') &&
     sidepanelText.includes('formatCompactUnit(length, "char", "chars", "字符")') &&
     sidepanelText.includes("Web images: ${remoteCount}") &&
     sidepanelText.includes("Images: ${imageCount}") &&
     !sidepanelText.includes("Unreachable images stay as links.") &&
     !sidepanelText.includes("draftTargetStateText") &&
+    !sidepanelText.includes("function draftEditorModeLabel") &&
     !sidepanelHtml.includes('id="draftTargetState"') &&
     !sidepanelHtml.includes('id="draftBrief"') &&
+    sidepanelHtml.includes('id="draftEditorModeToggle"') &&
+    sidepanelHtml.includes("data-editor-mode-toggle") &&
+    !sidepanelHtml.includes('id="draftEditorModeLabel"') &&
+    !sidepanelHtml.includes('data-editor-mode="edit"') &&
+    !sidepanelHtml.includes('data-editor-mode="read"') &&
+    !sidepanelHtml.includes('data-editor-mode="check"') &&
     !sidepanelCss.includes(".draft-brief") &&
     sidepanelCss.includes(".draft-editor-status"),
-  "draft editor status should stay compact and avoid a duplicate recognized-summary row"
+  "draft editor status should stay compact, host a single Write/Read toggle, and avoid duplicate recognized-summary or Check rows"
 );
 assert.ok(
   contentScriptText.includes("message.options || {}"),
@@ -745,45 +751,152 @@ assert.ok(
   "settings should link to the author X profile"
 );
 assert.ok(
-  sidepanelHtml.includes("vendor/canvas-confetti.browser.min.js"),
-  "side panel should load packaged canvas-confetti locally"
+  includesAll(sidepanelHtml, [
+    "vendor/minigfm.min.js",
+    'id="draftEditorToolbar"',
+    'id="draftEditorStatus"',
+    'id="draftEditorModeToggle"',
+    "data-editor-mode-toggle",
+    'class="editor-command-icon"',
+    'id="draftInlinePreview"',
+    'class="draft-editor-input-wrap"',
+    'id="draftSyntaxHighlight"',
+    '<textarea id="markdown"'
+  ]) &&
+    excludesAll(sidepanelHtml, [
+      ">Link</button>",
+      ">Image</button>",
+      ">Table</button>",
+      "vendor/codemirror-editor.bundle.js",
+      'id="draftEditorModeLabel"',
+      'data-editor-mode="edit"',
+      'data-editor-mode="read"',
+      'data-editor-mode="check"',
+      'id="draftBrief"'
+    ]) &&
+    includesAll(sidepanelText, [
+      'const DRAFT_EDITOR_MODES = new Set(["edit", "read"])',
+      "function draftText()",
+      "function miniGfm()",
+      "function protectReadPreviewCodeBlocks",
+      "function restoreReadPreviewCodeBlocks",
+      "function sanitizePreviewHtml",
+      "const schemeMatch = raw.match",
+      "return /^(https?|mailto|tel|ftp)$/i.test(schemeMatch[1]) ? raw : \"\";",
+      "button.disabled = !isEdit || queueModeActive()",
+      "function setDraftText(markdown",
+      "parseStatus = true",
+      "updateDraftEditorStatus({ parse = true } = {})",
+      "updateDraftEditorStatus({ parse: parseStatus });",
+      "updateDraftEditorStatus({ parse: false });",
+      "else if (draftText().trim()) scheduleAnalyzeDraft(STARTUP_DRAFT_ANALYZE_DELAY_MS);",
+      "function handleDraftEditorInput",
+      "function setDraftEditorMode",
+      "function updateDraftEditorModeToggle",
+      "function updateDraftEditorDensity",
+      "function plainDraftSyntaxText",
+      "function renderDraftSyntaxHighlight",
+      "SYNTAX_HIGHLIGHT_DETAIL_LIMIT",
+      "els.draftSyntaxHighlight.textContent = value;",
+      "function highlightInlineMarkdownSyntax",
+      "function syncDraftSyntaxScroll",
+      'els.markdown.addEventListener("scroll", syncDraftSyntaxScroll)',
+      "counts = shared.segmentCounts(parseDraftMarkdown(text).segments)",
+      "function translateVisibleWorkspace()",
+      "translateVisibleWorkspace();",
+      "translateDynamicDom(panel)",
+      "function formatCompactNumber",
+      'const tenThousandUnit = currentLanguage === "zh-TW" ? "萬" : "万";',
+      'els.draftPanel.dataset.queueMode = hasQueue ? "true" : "false";',
+      "els.draftEditorShell.hidden = hasQueue",
+      'els.draftEditorShell.dataset.density = isCompact ? "compact" : "roomy";',
+      "function runWhenIdle(callback, timeout = STARTUP_IDLE_TIMEOUT_MS)",
+      "function restoreSingleDraftMarkdown(markdown)",
+      "setDraftText(text, { preview: false, parseStatus: false });",
+      "scheduleAnalyzeDraft(STARTUP_DRAFT_ANALYZE_DELAY_MS);",
+      "function ensureRecordHistoryRestored({ render = false } = {})",
+      "function scheduleRecordHistoryRestore()",
+      "pendingRecordHistoryEntries",
+      "function syncLatestEvidenceRecord()",
+      "function syncRecordPanel({ translate = els.recordsPanel?.classList.contains(\"active\") } = {})",
+      "syncRecordPanel({ translate: false });",
+      "restoreRecordHistory({ render })",
+      "ensureRecordHistoryRestored({ render: false }).then(() =>",
+      'if (target === "records") {',
+      "void ensureRecordHistoryRestored({ render: true }).then(() =>",
+      "syncRecordPanel({ translate: true });",
+      "function updateInlinePreview",
+      "function applyTextareaCommand",
+      "return importMarkdownDraft(draftText())",
+      "els.draftEditorModeToggle?.addEventListener"
+    ]) &&
+    excludesAll(sidepanelText, [
+      'isChineseLanguage() ? "k" : "K"',
+      'isChineseLanguage() ? "m" : "M"',
+      "window.xPosterCodeMirror",
+      "lineNumbers",
+      "return importMarkdownDraft(els.markdown.value)"
+    ]) &&
+    includesAll(sidepanelCss, [
+      ".draft-editor-toolbar",
+      "grid-row: 2;",
+      "--draft-editor-roomy-block-size: clamp(260px, calc(100dvh - 292px), 430px);",
+      "--draft-editor-compact-block-size: clamp(156px, calc(100dvh - 292px), 220px);",
+      "--draft-editor-roomy-block-size: clamp(220px, calc(100dvh - 276px), 390px);",
+      "--draft-editor-compact-block-size: clamp(148px, calc(100dvh - 276px), 208px);",
+      ".draft-editor-shell[data-density=\"compact\"]",
+      ".panel.active {\n  min-height: 0;\n  display: grid;\n  align-self: stretch;",
+      "align-content: stretch;",
+      "grid-template-rows: auto auto minmax(0, 1fr) auto;",
+      ".composer {\n  position: relative;\n  height: 100%;\n  min-height: 0;",
+      ".composer[data-queue-mode=\"true\"]",
+      ".composer[data-queue-mode=\"true\"] .draft-queue",
+      "  .composer {\n    height: 100%;\n    min-height: 0;\n    align-content: stretch;\n    grid-template-rows: auto auto minmax(0, 1fr) auto;",
+      "  .composer[data-queue-mode=\"true\"]",
+      "box-shadow: 0 -8px 18px color-mix(in oklch, var(--ink), transparent 91%);",
+      "box-shadow: 0 7px 16px color-mix(in oklch, var(--button-fill), transparent 88%);",
+      "height: 100%;",
+      "min-height: 0;",
+      "max-height: 100%;",
+      ".draft-editor-input-wrap {\n  grid-row: 2;\n  position: relative;",
+      ".draft-syntax-highlight",
+      "pointer-events: none;",
+      "#markdown {\n  position: relative;\n  z-index: 1;",
+      "color: transparent;",
+      "caret-color: var(--ink);",
+      ".draft-token-heading",
+      ".draft-token-image",
+      ".draft-token-code",
+      '.draft-inline-preview[data-preview-mode="read"]',
+      ".draft-inline-preview",
+      ".draft-editor-status",
+      ".draft-editor-status > span",
+      ".draft-editor-mode-toggle",
+      ".draft-editor-toolbar button .editor-command-icon",
+      "stroke-linecap: round;",
+      "@media (max-width: 520px)",
+      ".draft-editor-formatting {\n    overflow-x: visible;\n    flex-wrap: wrap;"
+    ]) &&
+    excludesAll(sidepanelCss, [
+      "box-shadow: 0 -16px 30px rgba(15, 20, 25, 0.10);",
+      "box-shadow: 0 10px 22px color-mix(in oklch, var(--button-fill), transparent 84%);",
+      "min-height: min(720px, calc(100dvh - 104px));",
+      "min-height: min(700px, calc(100dvh - 92px));",
+      "height: var(--draft-editor-block-size);",
+      "min-height: var(--draft-editor-block-size);",
+      "max-height: var(--draft-editor-block-size);",
+      ".panel.active {\n  min-height: 0;\n  display: grid;\n  align-self: start;",
+      ".composer {\n  position: relative;\n  min-height: 0;",
+      ".composer {\n  position: relative;\n  height: 100%;\n  min-height: 0;\n  align-self: stretch;\n  align-content: start;",
+      "grid-template-rows: auto auto auto auto;",
+      ".draft-editor-status span {\n"
+    ]),
+  "side panel should use a lightweight native textarea editor with MiniGFM read preview, one status-bar mode toggle, responsive controls, and adapter-based draft reads"
 );
 assert.ok(
-  sidepanelHtml.includes("vendor/minigfm.min.js") &&
-  sidepanelHtml.includes('id="draftEditorToolbar"') &&
-    sidepanelHtml.includes('id="draftEditorStatus"') &&
-    sidepanelHtml.includes('data-editor-mode="edit"') &&
-    sidepanelHtml.includes('data-editor-mode="read"') &&
-    sidepanelHtml.includes('data-editor-mode="check"') &&
-    sidepanelHtml.includes('id="draftInlinePreview"') &&
-    sidepanelHtml.includes('<textarea id="markdown"') &&
-    sidepanelText.includes('const DRAFT_EDITOR_MODES = new Set(["edit", "read", "check"])') &&
-    sidepanelText.includes("function draftText()") &&
-    sidepanelText.includes("function miniGfm()") &&
-    sidepanelText.includes("function protectReadPreviewCodeBlocks") &&
-    sidepanelText.includes("function restoreReadPreviewCodeBlocks") &&
-    sidepanelText.includes("function sanitizePreviewHtml") &&
-    sidepanelText.includes("const schemeMatch = raw.match") &&
-    sidepanelText.includes("return /^(https?|mailto|tel|ftp)$/i.test(schemeMatch[1]) ? raw : \"\";") &&
-    sidepanelText.includes("button.disabled = !isEdit || queueModeActive()") &&
-    sidepanelText.includes("function setDraftText(markdown") &&
-    sidepanelText.includes("function handleDraftEditorInput") &&
-    sidepanelText.includes("function setDraftEditorMode") &&
-    sidepanelText.includes("function updateInlinePreview") &&
-    sidepanelText.includes("function applyTextareaCommand") &&
-    sidepanelText.includes("return importMarkdownDraft(draftText())") &&
-    !sidepanelHtml.includes("vendor/codemirror-editor.bundle.js") &&
-    !sidepanelText.includes("window.xPosterCodeMirror") &&
-    !sidepanelText.includes("lineNumbers") &&
-    !sidepanelText.includes("return importMarkdownDraft(els.markdown.value)") &&
-    !sidepanelHtml.includes('id="draftBrief"') &&
-    sidepanelCss.includes(".draft-editor-toolbar") &&
-    sidepanelCss.includes('.draft-inline-preview[data-preview-mode="read"]') &&
-    sidepanelCss.includes(".draft-inline-preview") &&
-    sidepanelCss.includes(".draft-editor-status") &&
-    sidepanelCss.includes("@media (max-width: 520px)") &&
-    sidepanelCss.includes(".draft-editor-formatting {\n    flex-wrap: wrap;"),
-  "side panel should use a lightweight native textarea editor with MiniGFM read preview, conversion check, responsive controls, and adapter-based draft reads"
+  sidepanelText.includes('"Ready to write.": "可以写入。"') &&
+    sidepanelText.includes("const isCompact = !value.trim() || (value.length < 420 && meaningfulLines <= 8 && !hasRichBlocks);"),
+  "short or empty drafts should stay compact and ready-state copy should be localized"
 );
 assert.ok(
   sidepanelHtml.includes('id="draftDropTarget"') &&
@@ -819,16 +932,20 @@ assert.ok(
   sidepanelHtml.includes('id="confettiOption"') &&
     sidepanelHtml.includes('id="successSoundOption"') &&
     sidepanelHtml.includes('id="successSoundStyle"') &&
+    sidepanelHtml.includes("Show a brief celebration on the X page when X reports a completed write.") &&
     !sidepanelHtml.includes('id="successSoundVolume"') &&
     !sidepanelHtml.includes('id="successSoundVolumeValue"') &&
     !sidepanelHtml.includes('data-i18n="Volume"') &&
     !sidepanelHtml.includes('id="testSuccessFeedback"'),
-  "settings should expose confetti, sound, and sound style without volume or a feedback test control"
+  "settings should expose page celebration, sound, and sound style without volume or a feedback test control"
 );
 assert.ok(
   sidepanelText.includes("triggerSuccessFeedback(response.summary)") &&
+    sidepanelText.includes("requestPageSuccessCelebration(summary)") &&
+    sidepanelText.includes('type: "xposter:success-celebration"') &&
+    sidepanelText.includes("colors: SUCCESS_CELEBRATION_COLORS") &&
     sidepanelText.includes("lastSuccessFeedbackKey"),
-  "successful imports should trigger feedback once"
+  "successful imports should request one celebration on the active X page"
 );
 assert.ok(
   sidepanelText.includes('return ["running", "parsed", "error"].includes(progress?.state);') &&
@@ -850,10 +967,25 @@ assert.ok(
   "starting a clean write should rely on the live progress strip instead of opening the activity panel"
 );
 assert.ok(
-  sidepanelText.includes("window.confetti.create") &&
-    sidepanelText.includes("useWorker: false") &&
-    !sidepanelText.includes("testSuccessFeedback"),
-  "confetti should run from a packaged local canvas without blob workers"
+  !sidepanelHtml.includes("vendor/canvas-confetti.browser.min.js") &&
+    !sidepanelText.includes("window.confetti.create") &&
+    !sidepanelText.includes("fireSuccessConfetti") &&
+    !sidepanelText.includes("successConfetti") &&
+    !sidepanelCss.includes(".success-confetti-canvas") &&
+    !sidepanelText.includes("testSuccessFeedback") &&
+    includesAll(contentScriptText, [
+      'const SUCCESS_CELEBRATION_ID = "__xposter_success_celebration__"',
+      'const SUCCESS_CELEBRATION_STYLE_ID = "__xposter_success_celebration_style__"',
+      "function injectSuccessCelebrationStyle",
+      "function showSuccessCelebration",
+      "prefersReducedMotion()",
+      "position: fixed;",
+      ".__xposter_success_mark",
+      ".__xposter_success_piece",
+      "prefers-reduced-motion: reduce",
+      'message?.type === "xposter:success-celebration"'
+    ]),
+  "celebration should render on the X page through the content script, not side panel canvas confetti"
 );
 assert.ok(
   sidepanelText.includes("AudioContext") &&
@@ -865,10 +997,11 @@ assert.ok(
     sidepanelText.includes("async function previewSuccessFeedback()") &&
     sidepanelText.includes("await primeSuccessAudio();") &&
     sidepanelText.includes("previewSuccessFeedback()") &&
+    !sidepanelText.includes("if (successFeedbackOptions.confetti) await requestPageSuccessCelebration();") &&
     !sidepanelText.includes("successSoundVolume") &&
     !sidepanelText.includes("successSoundVolumeValue") &&
     !sidepanelText.includes("Sound blocked"),
-  "completion sound should use audible local Web Audio at fixed full volume, preview style changes, unlock on write action, and keep settings free of test-only playback UI"
+  "completion sound should use audible local Web Audio at fixed full volume, preview style changes without page celebration noise, unlock on write action, and keep settings free of test-only playback UI"
 );
 assert.ok(
   backgroundText.includes("REMOTE_IMAGE_RETRY_DELAYS_MS = [0, 700, 1800]") &&
