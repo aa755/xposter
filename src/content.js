@@ -3758,7 +3758,8 @@
           0 -14px 34px rgba(29, 155, 240, 0.16),
           inset 0 1px 0 rgba(255, 255, 255, 0.86),
           inset 0 0 0 1px rgba(29, 155, 240, 0.08);
-        transform-origin: 50% 100%;
+        transform-origin: 50% 50%;
+        transform-box: border-box;
         will-change: transform, box-shadow, opacity;
       }
       #${DROP_HINT_ID}[data-surface="page-dock"]::after {
@@ -3775,17 +3776,18 @@
         background: rgba(255, 255, 255, 0.46);
         overflow: hidden;
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.62);
-        transform-origin: 50% 100%;
+        transform-origin: 50% 50%;
+        transform-box: border-box;
         will-change: transform, box-shadow, opacity;
         transition:
           background 220ms cubic-bezier(0.22, 1, 0.36, 1),
           border-color 220ms cubic-bezier(0.22, 1, 0.36, 1);
       }
       #${DROP_HINT_ID}[data-surface="page-dock"][data-state="ready"]::before {
-        animation: __xposter_drop_dock_breathe 1.85s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+        animation: __xposter_drop_dock_breathe 2.2s ease-in-out infinite;
       }
       #${DROP_HINT_ID}[data-surface="page-dock"][data-state="ready"]::after {
-        animation: __xposter_drop_dock_receive 1.85s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+        animation: __xposter_drop_dock_receive 2.2s ease-in-out infinite;
       }
       #${DROP_HINT_ID}[data-surface="page-dock"] .__xposter_drop_frame {
         width: min(720px, 100%);
@@ -4059,7 +4061,7 @@
       }
       @keyframes __xposter_drop_dock_breathe {
         0%, 100% {
-          transform: translateY(0) scale(1);
+          transform: scale(1);
           opacity: 1;
           box-shadow:
             0 -14px 36px rgba(29, 155, 240, 0.18),
@@ -4067,26 +4069,26 @@
             inset 0 0 0 1px rgba(29, 155, 240, 0.10);
         }
         50% {
-          transform: translateY(-2px) scale(1.006, 1.035);
-          opacity: 0.98;
+          transform: scale(1.002, 1.012);
+          opacity: 0.99;
           box-shadow:
-            0 -18px 42px rgba(29, 155, 240, 0.23),
+            0 -16px 38px rgba(29, 155, 240, 0.20),
             inset 0 1px 0 rgba(255, 255, 255, 0.96),
-            inset 0 0 0 1px rgba(29, 155, 240, 0.18);
+            inset 0 0 0 1px rgba(29, 155, 240, 0.14);
         }
       }
       @keyframes __xposter_drop_dock_receive {
         0%, 100% {
-          transform: translateY(0) scale(1);
+          transform: scale(1);
           opacity: 0.88;
           box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.62);
         }
         50% {
-          transform: translateY(-4px) scale(1.012, 1.055);
-          opacity: 1;
+          transform: scale(1.004, 1.016);
+          opacity: 0.96;
           box-shadow:
             inset 0 0 0 1px rgba(255, 255, 255, 0.72),
-            0 0 0 5px rgba(29, 155, 240, 0.10);
+            0 0 0 3px rgba(29, 155, 240, 0.08);
         }
       }
       @keyframes __xposter_folder_drop_hint {
