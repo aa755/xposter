@@ -87,6 +87,7 @@
   const recordSearchTextCache = new WeakMap();
 
   let latestParsed = null;
+  let latestParsedMarkdown = "";
   let latestCounts = shared.segmentCounts([]);
   let latestPageStatus = null;
   let latestDiagnostics = null;
@@ -138,6 +139,7 @@
   let miniGfmRenderer = null;
   let runSummaryCollapseTimer = null;
   let draftDropStatusTimer = null;
+  let draftDropActionStatus = null;
   let remoteImageAccessStatus = { origins: [], available: [], missing: [], checkedAt: null };
   let remoteImageProbeStatus = { state: "idle", total: 0, ok: 0, fail: 0, results: [], checkedAt: null };
   let languageOptionButtons = [];
@@ -254,7 +256,8 @@
   function collectDraftDropStatusNodes() {
     return {
       title: els.draftDropStatus?.querySelector("strong") || null,
-      detail: els.draftDropStatus?.querySelector("span") || null
+      detail: els.draftDropStatus?.querySelector("span") || null,
+      action: els.draftDropAction || null
     };
   }
 
@@ -509,7 +512,8 @@
   function updateDraftEditorStatus() {
     if (!els.draftEditorStats) return;
     const text = draftText();
-    setLocalizedTextIfChanged(els.draftEditorStats, editorStatsText(text, markdownSegmentCounts(text)));
+    const counts = latestParsedMarkdown === text ? latestCounts : shared.segmentCounts([]);
+    setLocalizedTextIfChanged(els.draftEditorStats, editorStatsText(text, counts));
   }
 
   function countMeaningfulMarkdownLines(text) {
@@ -707,7 +711,7 @@
 
   function focusDraftTextEditor() {
     if (queueModeActive()) return;
-    setDraftEditorMode("edit");
+    setDraftEditorMode("edit", { syntax: "none" });
     els.markdown?.focus?.();
   }
 
@@ -741,7 +745,7 @@
     scheduleDraftHistory("typed");
   }
 
-  function setDraftEditorMode(mode = "edit") {
+  function setDraftEditorMode(mode = "edit", { syntax = "now" } = {}) {
     draftEditorMode = DRAFT_EDITOR_MODES.has(mode) ? mode : "edit";
     const isEdit = draftEditorMode === "edit";
     const isPreview = !isEdit;
@@ -758,7 +762,11 @@
       setBooleanPropertyIfChanged(button, "disabled", !isEdit || hasQueue);
     });
     updateDraftEditorStatus();
-    if (isEdit) renderDraftSyntaxHighlight();
+    if (isEdit) {
+      if (syntax === "defer") scheduleDraftSyntaxHighlight();
+      else if (syntax === "none") cancelDeferredDraftSyntaxHighlight();
+      else renderDraftSyntaxHighlight();
+    }
     if (isPreview) updateInlinePreview();
   }
 
@@ -1188,6 +1196,16 @@
     return window.setTimeout(callback, 0);
   }
 
+  function runAfterFirstPaint(callback) {
+    if (typeof window.requestAnimationFrame !== "function") {
+      window.setTimeout(callback, 0);
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(callback);
+    });
+  }
+
   function languageOptionLabel(option) {
     if (!option) return "";
     return option.code === "auto" ? localizeText("Automatic") : option.nativeName;
@@ -1322,6 +1340,11 @@
     const text = String(value ?? "");
     if (node.style.getPropertyValue(property) === text) return;
     node.style.setProperty(property, text);
+  }
+
+  function removeStylePropertyIfChanged(node, property) {
+    if (!node || !property || !node.style.getPropertyValue(property)) return;
+    node.style.removeProperty(property);
   }
 
   function setClassNameIfChanged(node, value) {
@@ -1582,6 +1605,23 @@
       } catch {}
     }
     return references;
+  }
+
+  function firstLocalImageFolderHint(status = activeLocalImageFolderStatus()) {
+    const reference = status.references?.find?.((item) => !shared.isAbsoluteLocalImageSource(item.source));
+    const source = String(reference?.source || "").trim();
+    const candidates = source ? shared.localImagePathCandidates(source) : [];
+    const parts = candidates[0] || [];
+    if (parts.length > 1) return parts[0];
+    return "";
+  }
+
+  function localImageFolderActionDetail(status = activeLocalImageFolderStatus()) {
+    const count = Number(status.count || 0);
+    const hint = firstLocalImageFolderHint(status);
+    return hint
+      ? `${count} local image(s) use relative paths. Open the X Article page; xPoster will ask there for the folder that contains ${hint}.`
+      : `${count} local image(s) use relative paths. Open the X Article page; xPoster will ask there for the Markdown image folder.`;
   }
 
   function parsedDraftsForMarkdowns(markdowns = [], options = importOptions) {
@@ -2021,7 +2061,7 @@
   }
 
   function updateDraftBrief() {
-    const hasDraft = Boolean(latestParsed?.segments?.length);
+    const hasDraft = Boolean(latestParsed?.segments?.length || draftText().trim());
     setDatasetValueIfChanged(els.draftPanel, "emptyDraft", hasDraft || queueModeActive() ? "false" : "true");
   }
 
@@ -2476,7 +2516,7 @@
     });
   }
 
-  function syncDraftSurface() {
+  function syncDraftSurface({ syntax = null } = {}) {
     const hasQueue = queueModeActive();
     setDatasetValueIfChanged(els.draftPanel, "queueMode", hasQueue ? "true" : "false");
     setBooleanPropertyIfChanged(els.draftQueue, "hidden", !hasQueue);
@@ -2491,7 +2531,7 @@
       }
       syncVisibilityState(els.draftInlinePreview, true);
     } else {
-      setDraftEditorMode(draftEditorMode);
+      setDraftEditorMode(draftEditorMode, { syntax: syntax || (draftSyntaxIdleHandle ? "defer" : "now") });
     }
     updateDraftEditorStatus();
     updateDraftBrief();
@@ -2533,7 +2573,7 @@
       syncRemoteImageAccessStatusFromDraft(null);
       updateWriteButton();
     }
-    syncDraftSurface();
+    syncDraftSurface({ syntax: "none" });
   }
 
   function applyStartupDraftState(stored = {}) {
@@ -3042,10 +3082,6 @@
   }
 
   function updateProgressiveSections(context = {}) {
-    const localImages = localImageSegments();
-    const vault = currentVault();
-    const showLocalImages = Boolean(localImages.length || vault?.configured);
-    setBooleanPropertyIfChanged(els.localImagesPanel, "hidden", !showLocalImages);
     syncProgressiveSectionVisibility(context);
   }
 
@@ -3079,6 +3115,7 @@
     const markdown = draftText();
     if (!markdown.trim()) {
       latestParsed = null;
+      latestParsedMarkdown = "";
       latestCounts = shared.segmentCounts([]);
       syncDraftInspectorMetrics(null, latestCounts);
       syncRemoteImageAccessStatusFromDraft(null);
@@ -3101,6 +3138,7 @@
       const parsed = parseDraftMarkdown(markdown);
       const counts = shared.segmentCounts(parsed.segments);
       latestParsed = parsed;
+      latestParsedMarkdown = markdown;
       latestCounts = counts;
       syncDraftInspectorMetrics(parsed, counts);
       syncRemoteImageAccessStatusFromDraft(parsed);
@@ -3122,6 +3160,9 @@
       updateDraftEditorStatus();
       setDraftDropStatus("Markdown loaded", draftReadyDetail(markdown.length, counts), "done");
     } catch (error) {
+      latestParsed = null;
+      latestParsedMarkdown = "";
+      latestCounts = shared.segmentCounts([]);
       log(`Could not analyze draft: ${error?.message || error}`);
       showMarkdownLoadError(error?.message || MARKDOWN_LOAD_ERROR_DETAIL);
     }
@@ -3933,7 +3974,10 @@
     const gate = getImportGate(checks, { byId });
     const localAssetBlocker = localAssetWriteBlocker(checks, { byId });
     if (localAssetBlocker) {
-      return handleLocalAssetWriteBlocker(localAssetBlocker, { chooseWhenAvailable: true });
+      return handleLocalAssetWriteBlocker(localAssetBlocker, {
+        chooseWhenAvailable: true,
+        retryAfterChoose: () => (queueModeActive() ? importDraftQueue() : importDraft())
+      });
     }
     const action = primaryImportAction(gate);
     if (action.action === "import") return importDraft();
@@ -4185,7 +4229,7 @@
       "editor-content": { action: "check", button: "Check article" },
       bridge: { action: "check", button: "Check article" },
       uploads: { action: "check", button: "Check article" },
-      assets: { action: "chooseVault", button: "Choose" },
+      assets: { action: "chooseVault", button: "Choose folder" },
       plan: { action: "preview", button: "Preview" }
     };
     const command = check.action
@@ -4472,7 +4516,7 @@
       : localImages.count
         ? localImages.ready
           ? `${localImages.count} local image(s) can resolve through ${vault.name || "selected folder"}.`
-          : `${localImages.count} local image(s) need a readable folder. Choose the folder that contains their relative paths.`
+          : localImageFolderActionDetail(localImages)
         : "No local image paths detected.";
 
     return [
@@ -4554,8 +4598,8 @@
         label: "Local images",
         tone: localImages.absoluteCount ? "error" : localImages.needsFolder ? "warn" : "ok",
         detail: localImageDetail,
-        action: localImages.needsFolder ? "chooseVault" : "",
-        button: "Choose"
+        action: "",
+        button: ""
       },
       {
         id: "remote-images",
@@ -4746,21 +4790,67 @@
       tone: assets.tone,
       title: localImages.absoluteCount ? "Local image path blocked" : "Local image folder needed",
       detail,
-      action: assets.action || ""
+      action: localImages.needsFolder ? "chooseVault" : assets.action || "",
+      button: assets.button || "",
+      localImages
     };
   }
 
-  async function handleLocalAssetWriteBlocker(blocker, { chooseWhenAvailable = false, queueItemId = null } = {}) {
+  async function ensureXPageForVaultPrompt() {
+    const active = await activeTab();
+    if (!isArticlesUrl(active?.url)) {
+      log("Opening X Articles so the page can ask for the local image folder.");
+      await openArticles();
+    }
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await delay(attempt < 2 ? 300 : 650);
+      const response = await sendToActiveTab({ type: "xposter:page-status" });
+      if (response?.ok && response.isArticleRoute) {
+        await refreshPageState().catch(() => {});
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: "open an X page first" };
+  }
+
+  async function handleLocalAssetWriteBlocker(
+    blocker,
+    { chooseWhenAvailable = false, queueItemId = null, retryAfterChoose = null } = {}
+  ) {
+    if (chooseWhenAvailable && blocker.action === "chooseVault") {
+      log(blocker.detail || "Local images need a folder. xPoster will ask inside the X page.");
+      updateWriteButton();
+      activeWriteQueueItemId = null;
+      if (queueItemId) resetQueueItemWritingState(queueItemId);
+      const selected = await chooseVault({
+        status: blocker.localImages || activeLocalImageFolderStatus(),
+        ensureXPage: true,
+        showSidepanelFallback: false
+      });
+      if (selected?.ok && typeof retryAfterChoose === "function") {
+        log("Local image folder selected. Continuing import.");
+        return retryAfterChoose();
+      }
+      if (!selected?.skipped) {
+        setDraftDropStatus("Local image folder needed", localImageFolderActionDetail(blocker.localImages), "error", {
+          action: "openArticles",
+          button: "Open X",
+          status: blocker.localImages || null
+        });
+      }
+      return { ok: false, error: selected?.error || blocker.detail, localAssets: true };
+    }
     log(blocker.detail || "Choose the local image folder before writing.");
-    setDraftDropStatus(blocker.title, blocker.detail || "Choose the local image folder before writing.", "error");
+    setDraftDropStatus(blocker.title, blocker.detail || "Choose the local image folder before writing.", "error", {
+      action: blocker.action,
+      button: blocker.button || "Open X",
+      status: blocker.localImages || null
+    });
     openDetailsFor(els.preflightPanel);
     scrollTargetIntoView(els.preflightPanel, "center");
     updateWriteButton();
     activeWriteQueueItemId = null;
     if (queueItemId) resetQueueItemWritingState(queueItemId);
-    if (chooseWhenAvailable && blocker.action === "chooseVault") {
-      await chooseVault();
-    }
     return { ok: false, error: blocker.detail, localAssets: true };
   }
 
@@ -4780,7 +4870,7 @@
       byId.get("plan")?.tone !== "ok" && "The draft does not have anything xPoster can import yet.",
       requiresBridge && byId.get("bridge")?.tone !== "ok" && "Click Check after the X editor opens.",
       requiresUploads && byId.get("uploads")?.tone !== "ok" && "Click Check with the X editor open so images can upload.",
-      requiresAssets && byId.get("assets")?.tone !== "ok" && "Choose the local image folder."
+      requiresAssets && byId.get("assets")?.tone !== "ok" && "Open X Articles; xPoster will ask for the local image folder there."
     ].filter(Boolean);
     if (!blockers.length) return { ok: true, tone: "ready", message: "Ready to import into the active X Article." };
     const tone =
@@ -4815,7 +4905,7 @@
     translateDynamicDom(els.activityLog);
   }
 
-  function setDraftDropStatus(title, detail, tone = "idle") {
+  function setDraftDropStatus(title, detail, tone = "idle", action = {}) {
     if (!els.draftDropStatus) return;
     window.clearTimeout(draftDropStatusTimer);
     draftDropStatusTimer = null;
@@ -4829,6 +4919,11 @@
     setBooleanPropertyIfChanged(els.draftDropDismiss, "hidden", false);
     setLocalizedTextIfChanged(draftDropStatusNodes.title, title);
     setLocalizedTextIfChanged(draftDropStatusNodes.detail, detail);
+    const actionName = action?.action || "";
+    draftDropActionStatus = actionName ? action.status || null : null;
+    setBooleanPropertyIfChanged(draftDropStatusNodes.action, "hidden", !actionName);
+    setDatasetValueIfChanged(draftDropStatusNodes.action, "draftDropAction", actionName);
+    if (actionName) setLocalizedTextIfChanged(draftDropStatusNodes.action, action.button || "Choose folder");
   }
 
   function setCompactImportStatus(summary = null) {
@@ -4842,6 +4937,9 @@
     setBooleanPropertyIfChanged(els.draftDropStatus, "hidden", true);
     setDatasetValueIfChanged(els.draftDropStatus, "tone", "idle");
     setBooleanPropertyIfChanged(els.draftDropDismiss, "hidden", true);
+    draftDropActionStatus = null;
+    setBooleanPropertyIfChanged(draftDropStatusNodes.action, "hidden", true);
+    setDatasetValueIfChanged(draftDropStatusNodes.action, "draftDropAction", "");
   }
 
   function acknowledgeDraftInput() {
@@ -5314,12 +5412,13 @@
   function paintStartupShell() {
     applyTheme(currentThemeMode);
     populateLanguageSelect();
-    setDraftEditorMode("edit");
+    setDraftEditorMode("edit", { syntax: "none" });
     syncPanelLayout();
     restoreVaultState();
     updateLiveProgress();
-    syncDraftSurface();
+    syncDraftSurface({ syntax: "none" });
     updateWriteButton();
+    showWorkspacePanel("draft");
   }
 
   async function restoreStartupState() {
@@ -5398,7 +5497,7 @@
     const diagnosticsFailed = targetOk && ["bridge", "uploads", "editor"].some((id) => byId.get(id)?.tone === "error");
     const mediaFailed = latestEvidence?.result?.summary?.images?.fail || latestProgress?.summary?.images?.fail || 0;
     const atomicFailed = latestEvidence?.result?.summary?.main?.atomicFail || latestProgress?.summary?.main?.atomicFail || 0;
-    const localAssetsPending = byId.get("assets")?.tone === "warn" && byId.get("assets")?.action;
+    const localAssetsPending = byId.get("assets")?.tone === "warn";
     if (importFailed) {
       items.push({
         tone: "error",
@@ -5434,8 +5533,8 @@
             ? "openArticles"
             : byId.get("page-script")?.tone !== "ok"
               ? "refreshXTab"
-            : byId.get("assets")?.action
-              ? byId.get("assets").action
+            : byId.get("assets")?.tone === "warn"
+              ? "openArticles"
               : "check",
         button:
           byId.get("draft")?.tone !== "ok"
@@ -5444,8 +5543,8 @@
               ? "Open"
             : byId.get("page-script")?.tone !== "ok"
               ? "Refresh X"
-            : byId.get("assets")?.action
-              ? byId.get("assets").button || "Choose"
+            : byId.get("assets")?.tone === "warn"
+              ? "Open X"
             : "Check X"
       });
     } else if (!hasImportEvidence) {
@@ -5487,8 +5586,8 @@
         tone: "warn",
         title: "Local image folder pending",
         detail: byId.get("assets")?.detail || "Choose a readable local image folder before importing local paths.",
-        action: "chooseVault",
-        button: "Choose"
+        action: "openArticles",
+        button: "Open X"
       });
     }
 
@@ -5532,36 +5631,71 @@
     };
   }
 
-  function showWorkspacePanel(target) {
-    let activeTabIndex = -1;
-    workspaceTabs.forEach((tab, index) => {
-      const isActive = tab.dataset.tab === target;
-      if (isActive) activeTabIndex = index;
-      setClassPresenceIfChanged(tab, "active", isActive);
+  function activeWorkspaceTarget(target = "draft") {
+    return workspacePanels.some((panel) => panel.dataset.panel === target) ? target : "draft";
+  }
+
+  function workspaceTargetIndex(target) {
+    return workspaceTabs.findIndex((tab) => tab.dataset.tab === target);
+  }
+
+  function syncWorkspaceTabs(target) {
+    const activeTabIndex = workspaceTargetIndex(target);
+    workspaceTabs.forEach((tab) => {
+      setClassPresenceIfChanged(tab, "active", tab.dataset.tab === target);
     });
     if (workspaceTabsContainer) {
       setStylePropertyIfChanged(workspaceTabsContainer, "--tab-count", Math.max(workspaceTabs.length, 1));
       setStylePropertyIfChanged(workspaceTabsContainer, "--tab-index", Math.max(activeTabIndex, 0));
       setDatasetValueIfChanged(workspaceTabsContainer, "activeTab", activeTabIndex >= 0 ? "true" : "false");
     }
+    return activeTabIndex;
+  }
+
+  function syncPanelItemMotion(panel) {
+    if (!panel) return;
+    Array.from(panel.children || []).forEach((child, index) => {
+      if (child.hidden) removeStylePropertyIfChanged(child, "--panel-item-index");
+      else setStylePropertyIfChanged(child, "--panel-item-index", index);
+    });
+  }
+
+  function restartPanelMotion(panel) {
+    if (!panel || prefersReducedMotion()) return;
+    setStyleValueIfChanged(panel, "animation", "none");
+    void panel.offsetWidth;
+    setStyleValueIfChanged(panel, "animation", "");
+  }
+
+  function syncWorkspacePanels(target) {
     const targetPanels = [];
     workspacePanels.forEach((panel) => {
       const isActive = panel.dataset.panel === target;
       if (isActive) targetPanels.push(panel);
-      if (isActive && !panel.classList.contains("active")) {
-        setStyleValueIfChanged(panel, "animation", "none");
-        void panel.offsetWidth;
-        setStyleValueIfChanged(panel, "animation", "");
+      if (isActive) {
+        syncPanelItemMotion(panel);
+        if (!panel.classList.contains("active")) restartPanelMotion(panel);
       }
       setClassPresenceIfChanged(panel, "active", isActive);
     });
-    targetPanels.forEach((panel) => translateDynamicDom(panel, { syncEnvironment: false }));
-    syncLanguageEnvironment();
+    return targetPanels;
+  }
+
+  function hydrateWorkspacePanel(target) {
     if (target === "records") {
       void ensureRecordHistoryRestored({ render: true }).then(() => {
         syncRecordPanel({ translate: true });
       });
     }
+  }
+
+  function showWorkspacePanel(target) {
+    const nextTarget = activeWorkspaceTarget(target);
+    syncWorkspaceTabs(nextTarget);
+    const targetPanels = syncWorkspacePanels(nextTarget);
+    targetPanels.forEach((panel) => translateDynamicDom(panel, { syncEnvironment: false }));
+    syncLanguageEnvironment();
+    hydrateWorkspacePanel(nextTarget);
   }
 
   function prefersReducedMotion() {
@@ -5747,7 +5881,11 @@
     const byId = indexPreflightChecks(checks);
     const localAssetBlocker = localAssetWriteBlocker(checks, { ...preflightContext, byId });
     if (localAssetBlocker) {
-      return handleLocalAssetWriteBlocker(localAssetBlocker, { queueItemId });
+      return handleLocalAssetWriteBlocker(localAssetBlocker, {
+        chooseWhenAvailable: true,
+        queueItemId,
+        retryAfterChoose: () => importMarkdownDraft(markdownInput, { queueItemId, batch, sourceFileName })
+      });
     }
     const remoteImages = remoteHttpImageSegments(parsed);
     if (remoteImages.length) {
@@ -5887,7 +6025,11 @@
       const localAssetBlocker = localAssetWriteBlocker(checks, { ...preflightContext, byId });
       if (localAssetBlocker) {
         clearBatchWriteProgress();
-        return await handleLocalAssetWriteBlocker(localAssetBlocker, { chooseWhenAvailable: true });
+        batchWriting = false;
+        return await handleLocalAssetWriteBlocker(localAssetBlocker, {
+          chooseWhenAvailable: true,
+          retryAfterChoose: () => importDraftQueue()
+        });
       }
       const mediaBlocker = firstQueueMediaLimitBlocker(mediaUploadEstimateForParsedDrafts(parsedDrafts));
       if (mediaBlocker) {
@@ -6380,18 +6522,51 @@
     }, true);
   }
 
-  async function chooseVault() {
-    const response = await sendToActiveTab({ type: "xposter:choose-vault" });
+  async function chooseVault(options = {}) {
+    const status = options.status || activeLocalImageFolderStatus();
+    if (options.ensureXPage) {
+      const ready = await ensureXPageForVaultPrompt();
+      if (!ready.ok) {
+        log(localizeInterpolated("Local image folder setup failed: {error}", {
+          error: localizeText(ready.error || "open an X page first")
+        }));
+        if (status.count && options.showSidepanelFallback !== false) {
+          setDraftDropStatus("Local image folder needed", localImageFolderActionDetail(status), "error", {
+            action: "openArticles",
+            button: "Open X",
+            status
+          });
+        }
+        return { ok: false, error: ready.error || "open an X page first" };
+      }
+    }
+    const response = await sendToActiveTab({
+      type: "xposter:choose-vault",
+      count: status.count || 0,
+      hint: firstLocalImageFolderHint(status)
+    });
     if (response?.ok) {
       log(localizeInterpolated("Local image folder set: {name}.", { name: response.name }));
       await refreshPageState();
       updatePreflight();
-      return;
+      return response;
     }
-    if (response?.skipped) log("Local image folder selection skipped.");
-    else log(localizeInterpolated("Local image folder setup failed: {error}", {
-      error: localizeText(response?.error || "open an X page first")
+    if (response?.skipped) {
+      log("Local image folder selection skipped.");
+      return response;
+    }
+    const error = response?.error || "open an X page first";
+    log(localizeInterpolated("Local image folder setup failed: {error}", {
+      error: localizeText(error)
     }));
+    if (status.count && options.showSidepanelFallback !== false) {
+      setDraftDropStatus("Local image folder needed", localImageFolderActionDetail(status), "error", {
+        action: "openArticles",
+        button: "Open X",
+        status
+      });
+    }
+    return { ok: false, error };
   }
 
   async function clearVault() {
@@ -6486,8 +6661,6 @@
   }
 
   async function restoreVaultState() {
-    setLocalizedTextIfChanged(els.vaultState, "Choose from an active X page");
-    setLocalizedTextIfChanged(els.vaultDetail, "Choose from an active X page when Markdown uses relative image paths.");
     setLocalizedTextIfChanged(els.vaultSettingsText, "xPoster will ask when a Markdown draft uses local image paths.");
     setVaultClearEnabled(false);
   }
@@ -6495,26 +6668,19 @@
   function updateVaultState(vault) {
     if (!vault) {
       setVaultClearEnabled(false);
-      translateDynamicDom(els.localImagesPanel);
       return;
     }
     if (!vault.configured) {
-      setLocalizedTextIfChanged(els.vaultState, "Not configured");
-      setLocalizedTextIfChanged(els.vaultDetail, "When a draft uses relative image paths, choose the folder that contains them.");
       setLocalizedTextIfChanged(els.vaultSettingsText, "No folder connected. xPoster will ask when a draft needs local images.");
       setVaultClearEnabled(false);
       return;
     }
     const permissionText = vault.permission === "granted" ? "Read access granted" : "Permission needed";
-    const savedText = vault.savedAt ? `Saved ${new Date(vault.savedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` : "Saved in this browser";
-    setLocalizedTextIfChanged(els.vaultState, `Selected: ${vault.name}`);
-    setLocalizedTextIfChanged(els.vaultDetail, `${permissionText}. ${savedText}.`);
     setLocalizedTextIfChanged(els.vaultSettingsText, `${vault.name} - ${permissionText.toLowerCase()}.`);
     setVaultClearEnabled(true);
   }
 
   function setVaultClearEnabled(enabled) {
-    setBooleanPropertyIfChanged(els.clearVault, "disabled", !enabled);
     setBooleanPropertyIfChanged(els.clearVaultSettings, "disabled", !enabled);
   }
 
@@ -6563,7 +6729,7 @@
       kind,
       capturedAt: new Date().toISOString(),
       draftRecordId: activeDraftRecordId || null,
-      draftFingerprint: activeDraftFingerprint || draftFingerprint(markdown),
+      draftFingerprint: draftFingerprint(markdown),
       source: currentDraftRecord()?.source || null,
       draft: {
         title: latestParsed?.title || null,
@@ -7830,7 +7996,7 @@
     log("Record package saved.");
   }
 
-  async function runRunbookAction(action) {
+  async function runRunbookAction(action, options = {}) {
     switch (action) {
       case "addDraft":
         openNewDraftEditor();
@@ -7848,7 +8014,11 @@
         await runPreflight();
         break;
       case "chooseVault":
-        await chooseVault();
+        await chooseVault({
+          status: options.status || activeLocalImageFolderStatus(),
+          ensureXPage: true,
+          showSidepanelFallback: false
+        });
         break;
       case "import":
         await importDraft();
@@ -7907,8 +8077,11 @@
   els.runPreflight.addEventListener("click", runPreflight);
   els.loadFile.addEventListener("click", loadFile);
   els.draftDropDismiss?.addEventListener("click", dismissDraftDropStatus);
-  els.pickVault.addEventListener("click", chooseVault);
-  els.clearVault.addEventListener("click", clearVault);
+  els.draftDropAction?.addEventListener("click", async () => {
+    const action = els.draftDropAction?.dataset.draftDropAction || "";
+    if (!action) return;
+    await runRunbookAction(action, { status: draftDropActionStatus });
+  });
   els.clearVaultSettings.addEventListener("click", clearVault);
   els.copyEvidence.addEventListener("click", copyEvidence);
   els.copyEvidencePackage.addEventListener("click", copyEvidencePackage);
@@ -8029,7 +8202,9 @@
     });
   });
 
-  restoreStartupState().catch(() => analyzeDraft());
+  runAfterFirstPaint(() => {
+    restoreStartupState().catch(() => analyzeDraft());
+  });
   installSystemThemeSync();
   scheduleRecordHistoryRestore();
   runWhenIdle(() => {

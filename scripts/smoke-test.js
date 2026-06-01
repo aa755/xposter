@@ -165,6 +165,10 @@ const mainMediaHelperStart = mainWorldText.indexOf("  function normalizeMediaIdV
 const mainMediaHelperEnd = mainWorldText.indexOf("  function placeSelectionAtMarker");
 const mainMarkerHelperStart = mainWorldText.indexOf("  function findMarkerLocation");
 const mainMarkerHelperEnd = mainWorldText.indexOf("  function kickRender");
+const articleRouteHelperStart = contentScriptText.indexOf("  function isArticleRoute");
+const articleRouteHelperEnd = contentScriptText.indexOf("  function collectTargetContext");
+const articleExportRouteHelperStart = contentScriptText.indexOf("  function isArticleExportRoute");
+const articleExportRouteHelperEnd = contentScriptText.indexOf("  function scheduleArticleExportSync");
 const statusSandbox = {
   document: { body: {}, documentElement: {} },
   getComputedStyle: () => ({ backgroundColor: "rgb(18, 26, 34)" }),
@@ -196,6 +200,13 @@ assert.ok(
   mainMarkerHelperStart >= 0 && mainMarkerHelperEnd > mainMarkerHelperStart,
   "main-world marker cleanup and relocation helper functions should be present"
 );
+assert.ok(
+  articleRouteHelperStart >= 0 &&
+    articleRouteHelperEnd > articleRouteHelperStart &&
+    articleExportRouteHelperStart >= 0 &&
+    articleExportRouteHelperEnd > articleExportRouteHelperStart,
+  "article export route helpers should be present"
+);
 vm.runInNewContext(
   `const state = { language: "zh" };
    const CONTENT_ZH_TEXT = new Map(Object.entries({
@@ -216,6 +227,47 @@ vm.runInNewContext(
    this.state = state;
    this.statusHelpers = { statusThemeFromPage, statusProgressForText, translateContentText, articleExportLabel, articleExportShortLabel };`,
   statusSandbox
+);
+const articleRouteSandbox = { URL };
+vm.runInNewContext(
+  `const ARTICLE_EXPORT_LONGFORM_SELECTOR = "[data-testid='twitterArticleReadView']";
+   let longformPresent = false;
+   let location = { href: "https://x.com/home", origin: "https://x.com", pathname: "/home" };
+   const document = { querySelector: () => longformPresent ? {} : null };
+   function setLocation(href) {
+     const parsed = new URL(href);
+     location = { href, origin: parsed.origin, pathname: parsed.pathname };
+   }
+   ${contentScriptText.slice(articleRouteHelperStart, articleRouteHelperEnd)}
+   ${contentScriptText.slice(articleExportRouteHelperStart, articleExportRouteHelperEnd)}
+   setLocation("https://x.com/i/article/2061085830580785152");
+   const iArticle = { id: articleExportIdFromUrl(), route: isArticleExportRoute() };
+   setLocation("https://x.com/alice/status/111/article/222?ref=profile");
+   const nestedArticle = { id: articleExportIdFromUrl(), route: isArticleExportRoute() };
+   setLocation("https://twitter.com/alice/articles/333");
+   const pluralArticle = { id: articleExportIdFromUrl(), route: isArticleExportRoute() };
+   setLocation("https://x.com/alice/status/444");
+   const statusArticle = { id: articleExportIdFromUrl(), route: isArticleExportRoute() };
+   setLocation("https://x.com/compose/articles/edit/555");
+   const composeEdit = { id: articleExportIdFromUrl(), route: isArticleExportRoute() };
+   setLocation("https://x.com/compose/articles");
+   const composeList = { id: articleExportIdFromUrl(), route: isArticleExportRoute() };
+   setLocation("https://example.com/i/article/666");
+   const nonX = articleExportPathInfo();
+   setLocation("https://x.com/new-article-route/777");
+   longformPresent = true;
+   const longformFallback = isArticleExportRoute();
+   this.articleExportRouteResults = {
+     iArticle,
+     nestedArticle,
+     pluralArticle,
+     statusArticle,
+     composeEdit,
+     composeList,
+     nonX,
+     longformFallback
+   };`,
+  articleRouteSandbox
 );
 vm.runInNewContext(
   `const X_ARTICLE_MEDIA_SOFT_LIMIT = 25;
@@ -483,8 +535,12 @@ assert.ok(
 assert.ok(
   contentScriptText.includes('"Local image folder": "本地图片文件夹"') &&
     contentScriptText.includes('"Choose folder": "选择文件夹"') &&
+    contentScriptText.includes("function firstLocalImageFolderHintForSegments") &&
+    contentScriptText.includes("promptVaultSelection({ count, hint: firstLocalImageFolderHintForSegments(segments) })") &&
+    contentScriptText.includes("[/^(\\d+) local image\\(s\\) use relative paths\\. Select the folder that contains (.+)\\.$/, \"$1 张本地图片使用相对路径。请选择包含 $2 的文件夹。\"]") &&
     contentScriptText.includes("[/^(\\d+) local image\\(s\\) need a root folder\\.$/, \"$1 张本地图片需要选择根文件夹。\"]") &&
     contentScriptText.includes("const title = translateContentText(\"Local image folder\")") &&
+    contentScriptText.includes('const helpPath = hint || "img"') &&
     contentScriptText.includes("const chooseLabel = translateContentText(\"Choose folder\")"),
   "X-page local image folder prompt should not leak English in Chinese mode"
 );
@@ -700,6 +756,11 @@ assert.ok(
     'enabled: settings.enabled !== false',
     'function installArticleExportButton',
     'function extractReadableXArticle',
+    'function articleExportPathInfo',
+    'function articleExportAnchorSelector',
+    'function articleExportPathMatches',
+    'articleExportPathInfo().readable',
+    'segment) => /^(?:article|articles)$/.test(segment)',
     'const ARTICLE_EXPORT_LONGFORM_SELECTOR',
     'function hasReadableArticleSignal',
     'function containerHasReadableArticleSignal',
@@ -848,6 +909,20 @@ assert.equal(statusSandbox.statusHelpers.translateContentText("Writing article")
 assert.equal(statusSandbox.statusHelpers.translateContentText("Article title Markdown tools"), "文章标题区 Markdown 工具", "X article export group should describe its title placement");
 assert.equal(statusSandbox.statusHelpers.articleExportLabel("copy"), "复制 Markdown", "X article export controls should localize action labels");
 assert.equal(statusSandbox.statusHelpers.articleExportShortLabel("download"), "下载 MD", "X article export title labels should use compact localized text");
+assert.deepEqual(
+  JSON.parse(JSON.stringify(articleRouteSandbox.articleExportRouteResults)),
+  {
+    iArticle: { id: "2061085830580785152", route: true },
+    nestedArticle: { id: "222", route: true },
+    pluralArticle: { id: "333", route: true },
+    statusArticle: { id: "444", route: true },
+    composeEdit: { id: null, route: false },
+    composeList: { id: null, route: false },
+    nonX: { id: null, readable: false },
+    longformFallback: true
+  },
+  "article export tools should mount on modern readable X Article URLs while staying out of compose routes"
+);
 statusSandbox.state.language = "zh-TW";
 assert.equal(statusSandbox.statusHelpers.translateContentText("Preparing Markdown..."), "正在準備 Markdown...", "X page status details should support Traditional Chinese");
 assert.equal(statusSandbox.statusHelpers.translateContentText("Queue Markdown drafts"), "加入 Markdown 草稿佇列", "X page drop hints should support Traditional Chinese");
@@ -1220,24 +1295,78 @@ assert.deepEqual(
 assert.ok(
   sidepanelHtml.includes('class="secondary compact preflight-action"') &&
     sidepanelHtml.includes('data-preflight-action="chooseVault"') &&
+    sidepanelHtml.includes('id="draftDropAction"') &&
     !sidepanelHtml.includes('id="pickVaultSettings"') &&
+    !sidepanelHtml.includes('id="localImagesPanel"') &&
+    !sidepanelHtml.includes('id="pickVault"') &&
+    !sidepanelHtml.includes('id="clearVault"') &&
+    !sidepanelHtml.includes('id="vaultState"') &&
+    !sidepanelHtml.includes('id="vaultDetail"') &&
     sidepanelHtml.includes("xPoster will ask when a Markdown draft uses local image paths.") &&
+    sidepanelElementsText.includes('"draftDropAction"') &&
+    !sidepanelElementsText.includes('"localImagesPanel"') &&
+    !sidepanelElementsText.includes('"pickVault"') &&
+    !sidepanelElementsText.includes('"clearVault"') &&
+    !sidepanelElementsText.includes('"vaultState"') &&
+    !sidepanelElementsText.includes('"vaultDetail"') &&
     sidepanelText.includes("function localImageReferences") &&
     sidepanelText.includes("function localImageFolderStatus") &&
     sidepanelText.includes("function activeLocalImageFolderStatus") &&
+    sidepanelText.includes("function localImageFolderActionDetail") &&
+    sidepanelText.includes('if (parts.length > 1) return parts[0];\n    return "";') &&
+    !sidepanelText.includes("if (source) return truncateText(source, 44);") &&
+    sidepanelText.includes("let draftDropActionStatus = null") &&
     sidepanelText.includes("function localAssetWriteBlocker") &&
     sidepanelText.includes("handleLocalAssetWriteBlocker(localAssetBlocker") &&
+    sidepanelText.includes("retryAfterChoose = null") &&
+    sidepanelText.includes("function ensureXPageForVaultPrompt") &&
+    sidepanelText.includes("Opening X Articles so the page can ask for the local image folder.") &&
+    sidepanelText.includes("chooseVault({\n        status: blocker.localImages || activeLocalImageFolderStatus(),\n        ensureXPage: true,\n        showSidepanelFallback: false\n      })") &&
+    sidepanelText.includes("status: blocker.localImages || null") &&
+    sidepanelText.includes("draftDropActionStatus = actionName ? action.status || null : null") &&
+    sidepanelText.includes("async function runRunbookAction(action, options = {})") &&
+    sidepanelText.includes("chooseVault({\n          status: options.status || activeLocalImageFolderStatus(),\n          ensureXPage: true,\n          showSidepanelFallback: false\n        })") &&
+    sidepanelText.includes("runRunbookAction(action, { status: draftDropActionStatus })") &&
+    sidepanelText.includes('action: "openArticles",\n          button: "Open X"') &&
+    sidepanelText.includes('action: "openArticles",\n        button: "Open X"') &&
+    sidepanelText.includes("Local image folder selected. Continuing import.") &&
+    sidepanelText.includes("retryAfterChoose: () => importMarkdownDraft(markdownInput, { queueItemId, batch, sourceFileName })") &&
+    sidepanelText.includes("retryAfterChoose: () => (queueModeActive() ? importDraftQueue() : importDraft())") &&
+    sidepanelText.includes("retryAfterChoose: () => importDraftQueue()") &&
+    sidepanelText.includes('sendToActiveTab({\n      type: "xposter:choose-vault",\n      count: status.count || 0,\n      hint: firstLocalImageFolderHint(status)\n    })') &&
     sidepanelText.includes('button[data-preflight-action]') &&
+    !sidepanelText.includes("els.pickVault.addEventListener") &&
+    !sidepanelText.includes("els.clearVault.addEventListener") &&
+    !sidepanelText.includes("setBooleanPropertyIfChanged(els.localImagesPanel") &&
+    !sidepanelText.includes("setLocalizedTextIfChanged(els.vaultState") &&
+    !sidepanelText.includes("setLocalizedTextIfChanged(els.vaultDetail") &&
     contentScriptText.includes('panel.addEventListener("click", async (event) =>') &&
     contentScriptText.includes('const button = event.target.closest?.("button");') &&
     contentScriptText.includes('if (button?.id === "xposter-vault-skip")') &&
     contentScriptText.includes('if (button?.id !== "xposter-vault-pick") return;') &&
+    contentScriptText.includes("promptVaultSelection(message).then(sendResponse)") &&
     !contentScriptText.includes('panel.querySelector("#xposter-vault-skip").addEventListener') &&
     !contentScriptText.includes('panel.querySelector("#xposter-vault-pick").addEventListener') &&
-    sidepanelText.includes("Choose the folder that contains their relative paths.") &&
+    sidepanelText.includes("Open the X Article page; xPoster will ask there for the folder that contains") &&
+    !sidepanelText.includes("Click Choose folder, then select the folder that contains") &&
+    sidepanelPatternsText.includes("打开 X 文章页后，xPoster 会在页面内询问包含 $2 的文件夹。") &&
+    !sidepanelPatternsText.includes("点击“选择文件夹”，然后选择包含 $2 的文件夹。") &&
     sidepanelMessagesText.includes("Local image path blocked") &&
+    sidepanelMessagesText.includes('"Open X": "打开 X"') &&
+    sidepanelMessagesText.includes('"Choose folder": "选择文件夹"') &&
+    sidepanelMessagesText.includes("打开 X 文章页，xPoster 会在那里询问本地图片文件夹。") &&
+    sidepanelMessagesText.includes("正在打开 X 文章页，稍后会在页面内询问本地图片文件夹。") &&
+    sidepanelMessagesText.includes("本地图片路径会在 X 页面内询问文件夹。") &&
+    sidepanelMessagesText.includes("写入时，xPoster 会在 X 页面内询问本地图片文件夹。") &&
+    sidepanelMessagesText.includes('"Choose local image folder": "在 X 页面选择本地图片文件夹"') &&
+    sidepanelMessagesText.includes("相对图片路径会在写入时从 X 页面选择一个可读取文件夹。") &&
+    !sidepanelMessagesText.includes("本地图片路径需要在设置里选择文件夹。") &&
+    !sidepanelMessagesText.includes("选择 Markdown 相对图片路径所在的文件夹。") &&
+    !sidepanelMessagesText.includes("选择包含 Markdown 相对图片路径的文件夹。") &&
     sidepanelMessagesText.includes("No folder connected. xPoster will ask when a draft needs local images.") &&
     sidepanelCss.includes("grid-template-columns: 18px minmax(0, 1fr) auto;") &&
+    !sidepanelCss.includes(".vault") &&
+    sidepanelCss.includes(".drop-status-action") &&
     sidepanelCss.includes(".preflight-action[hidden]"),
   "local image folder access should stay contextual: settings only shows status, preflight shows the action, and writes block before unresolved local assets start"
 );
@@ -1284,8 +1413,8 @@ assert.ok(
 assert.ok(
   sidepanelHtml.includes('id="articleExportOptions"') &&
     sidepanelHtml.includes('id="articleExportOption" checked') &&
-    sidepanelHtml.includes("Title Markdown tools") &&
-    sidepanelHtml.includes("Copy or download the article without adding a separate button row.") &&
+    sidepanelHtml.includes("Published article Markdown tools") &&
+    sidepanelHtml.includes("Copy or download a readable X Article as Markdown from its title area.") &&
     sidepanelRuntimeText.includes('const STORAGE_ARTICLE_EXPORT_SETTINGS = "xposter_article_export_settings"') &&
     sidepanelText.includes("let articleExportOptions = { enabled: true, mode: \"copy\" }") &&
     sidepanelText.includes("function restoreArticleExportOptions") &&
@@ -1671,7 +1800,9 @@ assert.ok(
       'setDatasetValueIfChanged(button, "nextMode", nextMode)',
       'setAttributeValueIfChanged(button, "aria-pressed", isRead ? "true" : "false")',
       'setAttributeValueIfChanged(button, "title", localizeText(nextLabel))',
-      "setLocalizedTextIfChanged(els.draftEditorStats, editorStatsText(text, markdownSegmentCounts(text)))",
+      "let latestParsedMarkdown = \"\"",
+      "const counts = latestParsedMarkdown === text ? latestCounts : shared.segmentCounts([]);",
+      "setLocalizedTextIfChanged(els.draftEditorStats, editorStatsText(text, counts))",
       "syncVisibilityState(els.draftEditorInputWrap, isPreview || hasQueue)",
       "draftEditorCommandButtons.forEach((button) =>",
       "setBooleanPropertyIfChanged(button, \"disabled\", !isEdit || hasQueue)",
@@ -1679,7 +1810,7 @@ assert.ok(
       'setPropertyValueIfChanged(els.markdown, "value", text)',
       "else if (draftText().trim()) scheduleAnalyzeDraft(STARTUP_DRAFT_ANALYZE_DELAY_MS);",
       "function handleDraftEditorInput",
-      "function setDraftEditorMode",
+      "function setDraftEditorMode(mode = \"edit\", { syntax = \"now\" } = {})",
       "function updateDraftEditorModeToggle",
       "function updateDraftEditorDensity",
       "function countMeaningfulMarkdownLines(text)",
@@ -1697,7 +1828,6 @@ assert.ok(
       'syncScrollPositionIfChanged(els.draftSyntaxHighlight, els.markdown)',
       'els.markdown.addEventListener("scroll", syncDraftSyntaxScroll)',
       "if (length) parts.push(formatCompactUnit(length, \"char\", \"chars\", \"字符\"));",
-      "editorStatsText(text, markdownSegmentCounts(text))",
       "function translateVisibleWorkspace()",
       "translateVisibleWorkspace();",
       "translateDynamicDom(panel, { syncEnvironment: false })",
@@ -1712,11 +1842,24 @@ assert.ok(
       "translateDynamicDom(workspaceTopbar || document.body, { syncEnvironment: false })",
       "translateDynamicDom(workspaceTabsContainer || document.body, { syncEnvironment: false })",
       'if (panel.classList.contains("active")) translateDynamicDom(panel, { syncEnvironment: false });',
-      "let activeTabIndex = -1",
-      "const isActive = tab.dataset.tab === target;",
-      "if (isActive) activeTabIndex = index;",
+      "function removeStylePropertyIfChanged(node, property)",
+      "function runAfterFirstPaint(callback)",
+      "function activeWorkspaceTarget(target = \"draft\")",
+      "function workspaceTargetIndex(target)",
+      "function syncWorkspaceTabs(target)",
+      "function syncPanelItemMotion(panel)",
+      "removeStylePropertyIfChanged(child, \"--panel-item-index\")",
+      "setStylePropertyIfChanged(child, \"--panel-item-index\", index)",
+      "function restartPanelMotion(panel)",
+      "if (!panel || prefersReducedMotion()) return;",
+      "function syncWorkspacePanels(target)",
+      "function hydrateWorkspacePanel(target)",
+      "const nextTarget = activeWorkspaceTarget(target);",
+      "syncWorkspaceTabs(nextTarget);",
+      "const targetPanels = syncWorkspacePanels(nextTarget);",
+      "hydrateWorkspacePanel(nextTarget);",
       'setStylePropertyIfChanged(workspaceTabsContainer, "--tab-count", Math.max(workspaceTabs.length, 1))',
-      'setClassPresenceIfChanged(tab, "active", isActive)',
+      'setClassPresenceIfChanged(tab, "active", tab.dataset.tab === target)',
       'setClassPresenceIfChanged(panel, "active", isActive)',
       'setClassPresenceIfChanged(els.draftPanel, "drag-active", true)',
       'setClassPresenceIfChanged(els.draftPanel, "drag-active", false)',
@@ -1729,6 +1872,12 @@ assert.ok(
       "function runWhenIdle(callback, timeout = STARTUP_IDLE_TIMEOUT_MS)",
       "function restoreSingleDraftMarkdown(markdown, { analyze = true } = {})",
       "setDraftText(text, { preview: false, syntax: \"defer\" });",
+      "setDraftEditorMode(\"edit\", { syntax: \"none\" });",
+      "function syncDraftSurface({ syntax = null } = {})",
+      "syncDraftSurface({ syntax: \"none\" });",
+      "setDraftEditorMode(draftEditorMode, { syntax: syntax || (draftSyntaxIdleHandle ? \"defer\" : \"now\") });",
+      "if (syntax === \"defer\") scheduleDraftSyntaxHighlight();",
+      "else if (syntax === \"none\") cancelDeferredDraftSyntaxHighlight();",
       "function scheduleDraftSyntaxHighlight",
       'setDatasetValueIfChanged(els.draftInlinePreview, "previewMode", "read")',
       'setLocalizedTextIfChanged(els.draftInlinePreviewTitle, "Reading preview")',
@@ -1736,6 +1885,8 @@ assert.ok(
       "setSourceHtmlIfChanged(els.draftInlinePreviewBody, emptyMarkdownPreviewHtml())",
       "setSourceHtmlIfChanged(els.draftInlinePreviewBody, markdownPreviewHtml(text))",
       "function paintStartupShell",
+      "runAfterFirstPaint(() =>",
+      "restoreStartupState().catch(() => analyzeDraft());",
       "function restoreStartupState",
       "function startupStorage",
       "STARTUP_STORAGE_KEYS",
@@ -1796,7 +1947,8 @@ assert.ok(
       "els.draftSyntaxHighlight.scrollLeft = els.markdown.scrollLeft",
       'els.draftInlinePreview.dataset.previewMode = "read"',
       'els.draftEditorShell.dataset.density = isCompact ? "compact" : "roomy";',
-      "setLocalizedText(els.draftEditorStats, editorStatsText(text, markdownSegmentCounts(text)))"
+      "setLocalizedText(els.draftEditorStats, editorStatsText(text, markdownSegmentCounts(text)))",
+      "setLocalizedTextIfChanged(els.draftEditorStats, editorStatsText(text, markdownSegmentCounts(text)))"
     ]) &&
     includesAll(sidepanelCss, [
       ".draft-editor-toolbar",
@@ -1845,6 +1997,13 @@ assert.ok(
       ".draft-editor-mode-toggle",
       ".draft-editor-formatting button .editor-command-icon",
       ".draft-editor-status > span",
+      "--motion-panel: 180ms;",
+      ".panel.active > *",
+      "animation: xposter-panel-item-enter var(--motion-panel) var(--ease-out-quint) both;",
+      "animation-delay: calc(var(--panel-item-index, 0) * 24ms);",
+      "@keyframes xposter-panel-item-enter",
+      ".panel.active > [hidden]",
+      ".panel.active > *,",
       "stroke-linecap: round;",
       "@media (max-width: 520px)",
       ".draft-editor-formatting {\n    overflow-x: auto;\n    flex-wrap: nowrap;"
@@ -2303,15 +2462,15 @@ assert.ok(
   "preflight refreshes should reuse one shared evidence context across gate, issue, runbook, proof, audit, timeline, and local-asset checks"
 );
 assert.ok(
-  sidepanelText.includes('setLocalizedTextIfChanged(els.vaultState, "Choose from an active X page")') &&
-    sidepanelText.includes('setLocalizedTextIfChanged(els.vaultState, "Not configured")') &&
-    sidepanelText.includes("setLocalizedTextIfChanged(els.vaultState, `Selected: ${vault.name}`)") &&
-    sidepanelText.includes('setBooleanPropertyIfChanged(els.clearVault, "disabled", !enabled)') &&
+  sidepanelText.includes('setLocalizedTextIfChanged(els.vaultSettingsText, "xPoster will ask when a Markdown draft uses local image paths.")') &&
+    sidepanelText.includes('setLocalizedTextIfChanged(els.vaultSettingsText, "No folder connected. xPoster will ask when a draft needs local images.")') &&
+    sidepanelText.includes('setLocalizedTextIfChanged(els.vaultSettingsText, `${vault.name} - ${permissionText.toLowerCase()}.`)') &&
     sidepanelText.includes('setBooleanPropertyIfChanged(els.clearVaultSettings, "disabled", !enabled)') &&
     sidepanelText.includes('setBooleanPropertyIfChanged(els.runPreflight, "disabled", true)') &&
     sidepanelText.includes('setBooleanPropertyIfChanged(els.runPreflight, "disabled", false)') &&
     sidepanelText.includes('setLocalizedTextIfChanged(els.runPreflight, "Check")') &&
-    sidepanelText.includes("translateDynamicDom(els.localImagesPanel)") &&
+    !sidepanelText.includes('setBooleanPropertyIfChanged(els.clearVault, "disabled", !enabled)') &&
+    !sidepanelText.includes("translateDynamicDom(els.localImagesPanel)") &&
     !sidepanelText.includes('els.vaultState.textContent = "Not configured"') &&
     !sidepanelText.includes("els.vaultState.textContent = `Selected:") &&
     !sidepanelText.includes("els.vaultDetail.textContent =") &&
@@ -2321,24 +2480,27 @@ assert.ok(
     !sidepanelText.includes("if (els.clearVaultSettings) els.clearVaultSettings.disabled = !enabled") &&
     !sidepanelText.includes("els.runPreflight.disabled = true") &&
     !sidepanelText.includes("els.runPreflight.disabled = false"),
-  "vault and preflight status refreshes should use localized changed-only text and disabled writes"
+  "vault and preflight status refreshes should use the settings status only and changed-only disabled writes"
 );
 assert.ok(
   sidepanelText.includes("function setTextContentIfChanged(node, value)") &&
     sidepanelText.includes("function setSourceHtmlIfChanged(node, html)") &&
     sidepanelText.includes("function setStylePropertyIfChanged(node, property, value)") &&
+    sidepanelText.includes("function removeStylePropertyIfChanged(node, property)") &&
     sidepanelText.includes("if (node.nodeValue !== nextValue) node.nodeValue = nextValue;") &&
     sidepanelText.includes("if (current !== translated) element.setAttribute(attr, translated);") &&
-    sidepanelText.includes("let activeTabIndex = -1;") &&
-    sidepanelText.includes("const isActive = tab.dataset.tab === target;") &&
-    sidepanelText.includes("if (isActive) activeTabIndex = index;") &&
-    sidepanelText.includes('setClassPresenceIfChanged(tab, "active", isActive)') &&
+    sidepanelText.includes("function syncWorkspaceTabs(target)") &&
+    sidepanelText.includes("const activeTabIndex = workspaceTargetIndex(target);") &&
+    sidepanelText.includes('setClassPresenceIfChanged(tab, "active", tab.dataset.tab === target)') &&
     sidepanelText.includes('setStylePropertyIfChanged(workspaceTabsContainer, "--tab-count", Math.max(workspaceTabs.length, 1))') &&
     sidepanelText.includes('setStylePropertyIfChanged(workspaceTabsContainer, "--tab-index", Math.max(activeTabIndex, 0))') &&
     sidepanelText.includes('setDatasetValueIfChanged(workspaceTabsContainer, "activeTab", activeTabIndex >= 0 ? "true" : "false")') &&
+    sidepanelText.includes("function syncPanelItemMotion(panel)") &&
+    sidepanelText.includes("function syncWorkspacePanels(target)") &&
     sidepanelText.includes("const targetPanels = [];") &&
     sidepanelText.includes("if (isActive) targetPanels.push(panel);") &&
     sidepanelText.includes("targetPanels.forEach((panel) => translateDynamicDom(panel, { syncEnvironment: false }));") &&
+    sidepanelText.includes("function restartPanelMotion(panel)") &&
     sidepanelText.includes('setStyleValueIfChanged(panel, "animation", "none")') &&
     sidepanelText.includes('setStyleValueIfChanged(panel, "animation", "")') &&
     sidepanelText.includes('setBooleanPropertyIfChanged(els.liveProgress, "hidden", !progressVisible)') &&
@@ -2372,7 +2534,6 @@ assert.ok(
     !sidepanelText.includes('workspaceTabsContainer.style.setProperty("--tab-count"') &&
     !sidepanelText.includes('workspaceTabsContainer.style.setProperty("--tab-index"') &&
     !sidepanelText.includes('workspaceTabsContainer.dataset.activeTab = activeTabIndex >= 0 ? "true" : "false"') &&
-    !sidepanelText.includes("const activeTabIndex = workspaceTabs.findIndex((tab) => tab.dataset.tab === target)") &&
     !sidepanelText.includes('setClassPresenceIfChanged(tab, "active", index === activeTabIndex)') &&
     !sidepanelText.includes("workspacePanels\n      .filter((panel) => panel.dataset.panel === target)") &&
     !sidepanelText.includes('panel.style.animation = "none"') &&
@@ -2397,7 +2558,14 @@ assert.ok(
 assert.ok(
   sidepanelText.includes('setDatasetValueIfChanged(els.draftPanel, "emptyDraft", hasDraft || queueModeActive() ? "false" : "true")') &&
     sidepanelText.includes('setPropertyValueIfChanged(els.recordSearchInput, "value", recordSearchQuery)') &&
-    sidepanelText.includes('setBooleanPropertyIfChanged(els.localImagesPanel, "hidden", !showLocalImages)') &&
+    sidepanelText.includes("function updateProgressiveSections(context = {})") &&
+    sidepanelText.includes("syncProgressiveSectionVisibility(context)") &&
+    !sidepanelText.includes("function currentDraftImportCompleted(markdown = draftText())") &&
+    !sidepanelText.includes("const importCompleteForDraft = currentDraftImportCompleted(markdown);") &&
+    !sidepanelText.includes("const needsLocalImageAction = localImages.count && !importCompleteForDraft;") &&
+    !sidepanelText.includes("const showLocalImages = Boolean(needsLocalImageAction || vault?.configured);") &&
+    sidepanelText.includes("draftFingerprint: draftFingerprint(markdown)") &&
+    !sidepanelText.includes('setBooleanPropertyIfChanged(els.localImagesPanel, "hidden", !showLocalImages)') &&
     sidepanelText.includes("function syncEvidenceRecordOutput(kind, evidence)") &&
     sidepanelText.includes("syncEvidenceRecordOutput(kind, latestEvidence)") &&
     sidepanelText.includes("syncEvidenceRecordOutput(latestEvidence.kind, latestEvidence)") &&
@@ -2412,6 +2580,8 @@ assert.ok(
     sidepanelText.includes('setBooleanPropertyIfChanged(els.copyEvidence, "disabled", false)') &&
     !sidepanelText.includes("if (els.draftPanel) els.draftPanel.dataset.emptyDraft =") &&
     !sidepanelText.includes("if (els.localImagesPanel) els.localImagesPanel.hidden = !showLocalImages") &&
+    !sidepanelText.includes("const showLocalImages = Boolean(localImages.length || vault?.configured)") &&
+    !sidepanelText.includes("draftFingerprint: activeDraftFingerprint || draftFingerprint(markdown)") &&
     !sidepanelText.includes("els.recordSearchInput.value = recordSearchQuery") &&
     !sidepanelText.includes('setLocalizedText(els.evidenceMeta, "No technical record saved yet.")') &&
     !sidepanelText.includes('setLocalizedText(els.evidenceText, "Run Check article or Write article to save a technical record.")') &&

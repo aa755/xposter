@@ -98,6 +98,8 @@
       [/^(\d+) local image\(s\) can resolve through (.+)\.$/, "$1 张本地图片可通过 $2 读取。"],
       [/^(\d+) local image\(s\) need a readable folder\.$/, "$1 张本地图片需要选择可读取文件夹。"],
       [/^(\d+) local image\(s\) need a readable folder\. Choose the folder that contains their relative paths\.$/, "$1 张本地图片需要可读取文件夹。请选择包含这些相对路径的文件夹。"],
+      [/^(\d+) local image\(s\) use relative paths\. Open the X Article page; xPoster will ask there for the folder that contains (.+)\.$/, "$1 张本地图片使用相对路径。打开 X 文章页后，xPoster 会在页面内询问包含 $2 的文件夹。"],
+      [/^(\d+) local image\(s\) use relative paths\. Open the X Article page; xPoster will ask there for the Markdown image folder\.$/, "$1 张本地图片使用相对路径。打开 X 文章页后，xPoster 会在页面内询问 Markdown 图片文件夹。"],
       [/^(\d+) local image path\(s\) require a readable folder\.$/, "$1 个本地图片路径需要可读取文件夹。"],
       [/^(\d+) absolute local image path\(s\) found\. Use paths relative to the selected folder\.$/, "发现 $1 个绝对本地图片路径。请改用相对于所选文件夹的路径。"],
       [/^(\d+) remote image\(s\) need source-site permission before upload\.$/, "$1 张网页图片会在写入时尝试处理。"],

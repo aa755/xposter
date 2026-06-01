@@ -49,6 +49,7 @@
         <div class="drop-status" id="draftDropStatus" data-tone="idle" aria-live="polite">
           <strong data-i18n="Markdown draft">Markdown draft</strong>
           <span data-i18n="Paste Markdown here, choose a file, or drop .md files.">Paste Markdown here, choose a file, or drop .md files.</span>
+          <button class="secondary compact drop-status-action" id="draftDropAction" type="button" data-draft-drop-action="" hidden data-i18n="Choose folder">Choose folder</button>
           <button class="drop-status-dismiss" id="draftDropDismiss" type="button" title="Close" aria-label="Close" data-i18n-title="Close" data-i18n-aria-label="Close" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z"/></svg>
           </button>
@@ -675,7 +676,7 @@
                   <strong>Local images</strong>
                   <span>Local image folder is optional.</span>
                 </div>
-                <button class="secondary compact preflight-action" type="button" data-preflight-action="chooseVault" hidden data-i18n="Choose">Choose</button>
+                <button class="secondary compact preflight-action" type="button" data-preflight-action="chooseVault" hidden data-i18n="Choose folder">Choose folder</button>
               </li>
               <li data-check="remote-images" data-tone="idle">
                 <span class="check-mark" aria-hidden="true"></span>
@@ -775,18 +776,6 @@
         </div>
       </details>
 
-      <section class="vault" id="localImagesPanel" hidden>
-        <div>
-          <h2>Local image folder</h2>
-          <p id="vaultState">Not configured</p>
-          <p class="vault-detail" id="vaultDetail">Choose from an active X page when Markdown uses relative image paths.</p>
-        </div>
-        <div class="button-cluster">
-          <button class="secondary compact" id="pickVault">Choose</button>
-          <button class="secondary compact danger" id="clearVault" disabled>Clear</button>
-        </div>
-      </section>
-
       <section class="settings panel" data-panel="settings">
         <h2 data-i18n="Settings">Settings</h2>
         <div class="setting-row setting-row-language">
@@ -872,15 +861,15 @@
         <div class="setting-row setting-row-stack">
           <div>
             <strong data-i18n="Article export">Article export</strong>
-            <span data-i18n="Keep Markdown tools beside readable X Article titles.">Keep Markdown tools beside readable X Article titles.</span>
+            <span data-i18n="On published X Article pages, show Markdown tools beside the article title.">On published X Article pages, show Markdown tools beside the article title.</span>
           </div>
           <fieldset class="setting-checks" id="articleExportOptions" aria-label="Article export" data-i18n-aria-label="Article export">
             <legend class="visually-hidden" data-i18n="Article export">Article export</legend>
             <label>
               <input type="checkbox" id="articleExportOption" checked />
               <span>
-                <strong data-i18n="Title Markdown tools">Title Markdown tools</strong>
-                <em data-i18n="Copy or download the article without adding a separate button row.">Copy or download the article without adding a separate button row.</em>
+                <strong data-i18n="Published article Markdown tools">Published article Markdown tools</strong>
+                <em data-i18n="Copy or download a readable X Article as Markdown from its title area.">Copy or download a readable X Article as Markdown from its title area.</em>
               </span>
             </label>
           </fieldset>

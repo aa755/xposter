@@ -249,8 +249,28 @@
     return location.pathname.match(/\/compose\/articles\/edit\/(\d+)/)?.[1] || null;
   }
 
-  function articleExportIdFromUrl() {
-    return location.pathname.match(/\/(?:status|article)\/(\d+)/)?.[1] || null;
+  function articleExportPathInfo(url = location.href) {
+    try {
+      const parsed = new URL(url, location.origin);
+      if (!/^(?:x|twitter)\.com$/i.test(parsed.hostname)) return { id: null, readable: false };
+      const segments = parsed.pathname.split("/").filter(Boolean);
+      if (segments[0] === "compose" && segments[1] === "articles") return { id: null, readable: false };
+      const articleIndex = segments.findIndex((segment) => /^(?:article|articles)$/.test(segment));
+      const articleId = articleIndex >= 0 && /^\d+$/.test(segments[articleIndex + 1] || "")
+        ? segments[articleIndex + 1]
+        : null;
+      const statusIndex = segments.findIndex((segment) => segment === "status");
+      const statusId = statusIndex >= 0 && /^\d+$/.test(segments[statusIndex + 1] || "")
+        ? segments[statusIndex + 1]
+        : null;
+      return { id: articleId || statusId || null, readable: Boolean(articleId || statusId) };
+    } catch {
+      return { id: null, readable: false };
+    }
+  }
+
+  function articleExportIdFromUrl(url = location.href) {
+    return articleExportPathInfo(url).id;
   }
 
   function collectTargetContext() {
@@ -368,6 +388,8 @@
       [/^(\d+) local image\(s\) skipped: directory picker is unavailable$/, "$1 张本地图片已跳过：当前浏览器无法选择文件夹"],
       [/^(\d+) local image\(s\) need a local image folder\.\.\.$/, "$1 张本地图片需要选择本地图片文件夹..."],
       [/^(\d+) local image\(s\) need a root folder\.$/, "$1 张本地图片需要选择根文件夹。"],
+      [/^(\d+) local image\(s\) use relative paths\. Select the folder that contains (.+)\.$/, "$1 张本地图片使用相对路径。请选择包含 $2 的文件夹。"],
+      [/^(\d+) local image\(s\) use relative paths\. Select the folder that contains your Markdown images\.$/, "$1 张本地图片使用相对路径。请选择包含 Markdown 图片的文件夹。"],
       [/^Local image folder set: (.+)$/, "本地图片文件夹已设置：$1"],
       [/^Old X Article Markdown Paste residue detected: (.+)$/, "检测到旧版 X Article Markdown Paste 残留：$1"],
       [/^Adding (\d+) dropped image(?:s)?\.\.\.$/, "正在添加 $1 张拖入的图片..."],
@@ -1278,8 +1300,9 @@
       throwIfImportCancelled();
 
       const coverLocalImage = coverSegment && shared.isLocalImageSource(coverSegment.source) ? coverSegment : null;
-      if (localImages.length || coverLocalImage) {
-        await ensureVaultForLocalImages(localImages.length + (coverLocalImage ? 1 : 0));
+      const localImageReferences = coverLocalImage ? [...localImages, coverLocalImage] : localImages;
+      if (localImageReferences.length) {
+        await ensureVaultForLocalImages(localImageReferences.length, localImageReferences);
       }
       throwIfImportCancelled();
       const imageMap = await prepareImages(segments);
@@ -1343,7 +1366,15 @@
     }
   }
 
-  async function ensureVaultForLocalImages(count) {
+  function firstLocalImageFolderHintForSegments(segments = []) {
+    const segment = segments.find((item) => shared.isLocalImageSource(item?.source));
+    const source = String(segment?.source || "").trim();
+    const candidates = source ? shared.localImagePathCandidates(source) : [];
+    const parts = candidates[0] || [];
+    return parts.length > 1 ? parts[0] : "";
+  }
+
+  async function ensureVaultForLocalImages(count, segments = []) {
     const existing = await shared.getVaultRecord().catch(() => null);
     if (existing?.handle && (await shared.queryReadPermission(existing.handle)) === "granted") return;
     if (typeof window.showDirectoryPicker !== "function") {
@@ -1351,7 +1382,7 @@
       return;
     }
     showStatus(`${count} local image(s) need a local image folder...`, "warn");
-    const result = await promptVaultSelection(count);
+    const result = await promptVaultSelection({ count, hint: firstLocalImageFolderHintForSegments(segments) });
     if (!result.ok && !result.skipped) {
       throw new Error(result.error || "Local image folder was not selected");
     }
@@ -1413,7 +1444,9 @@
     }
   }
 
-  function promptVaultSelection(count = 0) {
+  function promptVaultSelection(options = {}) {
+    const count = typeof options === "number" ? options : Number(options?.count || 0);
+    const hint = typeof options === "number" ? "" : String(options?.hint || "").trim();
     return new Promise((resolve) => {
       document.getElementById("__xposter_vault_prompt__")?.remove();
       const overlay = document.createElement("div");
@@ -1526,8 +1559,13 @@
       panel.className = "__xposter_vault_panel";
       const title = translateContentText("Local image folder");
       const detail = translateContentText(
-        count ? `${count} local image(s) need a root folder.` : "Choose the folder that contains your Markdown images."
+        count
+          ? hint
+            ? `${count} local image(s) use relative paths. Select the folder that contains ${hint}.`
+            : `${count} local image(s) use relative paths. Select the folder that contains your Markdown images.`
+          : "Choose the folder that contains your Markdown images."
       );
+      const helpPath = hint || "img";
       const helpStart = translateContentText("If your Markdown says");
       const helpMiddle = translateContentText("choose the folder that contains the");
       const helpEnd = translateContentText("directory.");
@@ -1538,7 +1576,7 @@
         <div class="__xposter_vault_title">${shared.escapeHtml(title)}</div>
         <div class="__xposter_vault_detail">${shared.escapeHtml(detail)}</div>
         <div class="__xposter_vault_note">
-          ${shared.escapeHtml(helpStart)} <code>![](./img/cover.png)</code>${helpJoiner}${shared.escapeHtml(helpMiddle)} <code>img</code> ${shared.escapeHtml(helpEnd)}
+          ${shared.escapeHtml(helpStart)} <code>![](./${shared.escapeHtml(helpPath)}/cover.png)</code>${helpJoiner}${shared.escapeHtml(helpMiddle)} <code>${shared.escapeHtml(helpPath)}</code> ${shared.escapeHtml(helpEnd)}
         </div>
         <div class="__xposter_vault_actions">
           <button id="xposter-vault-skip" class="__xposter_vault_skip" type="button">${shared.escapeHtml(skipLabel)}</button>
@@ -2347,7 +2385,10 @@
   }
 
   function isArticleExportRoute() {
-    return /^https:\/\/(?:x|twitter)\.com\/[^/?#]+\/(?:status|article)\/\d+(?:$|[/?#])/.test(location.href) && !isArticleRoute();
+    return !isArticleRoute() && (
+      articleExportPathInfo().readable ||
+      Boolean(document.querySelector(ARTICLE_EXPORT_LONGFORM_SELECTOR))
+    );
   }
 
   function scheduleArticleExportSync(delay = 160) {
@@ -2595,8 +2636,9 @@
   function extractReadableXArticle() {
     if (!hasReadableArticleSignal()) return null;
     const longformRoots = Array.from(document.querySelectorAll(ARTICLE_EXPORT_LONGFORM_SELECTOR));
-    const articleRoots = articleExportIdFromUrl()
-      ? Array.from(document.querySelectorAll(`a[href*="/article/${articleExportIdFromUrl()}"]`))
+    const articleAnchorSelector = articleExportAnchorSelector();
+    const articleRoots = articleAnchorSelector
+      ? Array.from(document.querySelectorAll(articleAnchorSelector))
       : [];
     const candidates = Array.from(new Set(
       longformRoots
@@ -2658,15 +2700,27 @@
   function articleExportMediaLinks(root = document) {
     const id = articleExportIdFromUrl();
     if (!id) return [];
-    return Array.from(root.querySelectorAll(`a[href*="/article/${id}"]`))
+    return Array.from(root.querySelectorAll(articleExportAnchorSelector(id)))
       .filter((link) => {
         try {
           const url = new URL(link.getAttribute("href") || link.href || "", location.origin);
-          return url.pathname.includes(`/article/${id}`) && (url.pathname.endsWith(`/article/${id}`) || url.pathname.includes(`/article/${id}/media/`));
+          return articleExportPathMatches(url.pathname, id);
         } catch {
           return false;
         }
       });
+  }
+
+  function articleExportAnchorSelector(id = articleExportIdFromUrl()) {
+    if (!id) return "";
+    return [`a[href*="/article/${id}"]`, `a[href*="/articles/${id}"]`].join(",");
+  }
+
+  function articleExportPathMatches(pathname, id) {
+    if (!id) return false;
+    return [`/article/${id}`, `/articles/${id}`].some((path) =>
+      pathname.includes(path) && (pathname.endsWith(path) || pathname.includes(`${path}/media/`))
+    );
   }
 
   function articleExportContainer(element) {
@@ -4523,7 +4577,7 @@
       return false;
     }
     if (message?.type === "xposter:choose-vault") {
-      promptVaultSelection(0).then(sendResponse);
+      promptVaultSelection(message).then(sendResponse);
       return true;
     }
     if (message?.type === "xposter:clear-vault") {
