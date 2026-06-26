@@ -134,6 +134,38 @@ In this example, xPoster can use the frontmatter title, try the cover image, upl
 
 A smoke-test draft is included at [fixtures/live-x-smoke.md](fixtures/live-x-smoke.md).
 
+## Optional Markdown Preprocessing
+
+For Markdown exported from another blog or static site, run the dependency-free
+preprocessor before loading the draft into xPoster:
+
+```bash
+python3 preprocess.py article.md \
+  --base-url https://example.com/blog/post/ \
+  --h3-as-bold \
+  -o article.xposter.md
+```
+
+The preprocessor can:
+
+- remove HTML comments outside fenced code blocks
+- turn relative Markdown links and images into absolute URLs when `--base-url`
+  is supplied
+- convert inline code spans to Unicode monospace text
+- keep protective code spans around converted identifiers with `_`, so xPoster's
+  Markdown parser does not mistake underscores for italics
+- normalize common code-fence aliases to language labels X is more likely to
+  highlight, for example `c++` -> `cpp`, `js` -> `javascript`, `py` -> `python`,
+  `yml` -> `yaml`, and `sh` -> `bash`
+- convert `###` headings to bold paragraphs with `--h3-as-bold`, useful when X
+  Articles do not render third-level headings distinctly
+
+List the built-in language aliases with:
+
+```bash
+python3 preprocess.py --list-language-aliases
+```
+
 ## Images
 
 **Local images**: keep image files near your Markdown file and choose the matching local image folder when xPoster asks. Relative paths like `./images/photo.png` work only after Chrome grants xPoster access to that folder.
