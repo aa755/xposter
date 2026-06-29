@@ -7,6 +7,10 @@
  *
  * Typical workflows:
  *   X_CLIENT_ID=... node scripts/upload-x-article.js --test-draft
+ *   node scripts/upload-x-article.js article.md \
+ *     --prepare-markdown \
+ *     --base-url https://example.com/blog/post/ \
+ *     --output article.xposter.md
  *   node scripts/upload-x-article.js article.md --dry-run --output payload.json
  *   node scripts/upload-x-article.js article.md \
  *     --preprocess \
@@ -28,9 +32,10 @@
  *     Use --render-special-blocks-as-images to render fenced code blocks and
  *     tables to PNGs with local headless Chrome, upload those PNGs, and place
  *     them as Article images.
- *   - Use --preprocess to run ../preprocess.py first. That strips HTML comments,
- *     normalizes fence language aliases such as c++ -> cpp, converts inline code
- *     spans to Unicode monospace text, and can rewrite Markdown links/images.
+ *   - Use --preprocess to prepare Markdown around parsing. That strips HTML
+ *     comments before parsing, then normalizes fence language aliases such as
+ *     c++ -> cpp, converts inline code spans to Unicode monospace text, and can
+ *     rewrite Markdown links/images after parsing.
  *
  * Assets and links:
  *   - --base-url only has an effect with --preprocess. It rewrites relative
@@ -108,6 +113,50 @@ const STYLE_MAP = {
   Strikethrough: "strikethrough",
   Code: ""
 };
+const MONO_UPPER_A = 0x1d670;
+const MONO_LOWER_A = 0x1d68a;
+const MONO_DIGIT_0 = 0x1d7f6;
+const FENCE_OPEN_RE = /^([ \t]{0,3})(`{3,}|~{3,})([^\n]*)$/;
+const LANGUAGE_ALIASES = new Map(Object.entries({
+  "c++": "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  "h++": "cpp",
+  hh: "cpp",
+  hpp: "cpp",
+  "c#": "csharp",
+  cs: "csharp",
+  "f#": "fsharp",
+  fs: "fsharp",
+  fsi: "fsharp",
+  fsx: "fsharp",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  node: "javascript",
+  ts: "typescript",
+  py: "python",
+  py3: "python",
+  python3: "python",
+  rb: "ruby",
+  rs: "rust",
+  golang: "go",
+  kt: "kotlin",
+  kts: "kotlin",
+  objc: "objectivec",
+  "objective-c": "objectivec",
+  sh: "bash",
+  shell: "bash",
+  zsh: "bash",
+  terminal: "bash",
+  console: "bash",
+  ps1: "powershell",
+  yml: "yaml",
+  docker: "dockerfile",
+  make: "makefile",
+  mk: "makefile",
+  md: "markdown"
+}));
 
 function usage() {
   return `Usage:
@@ -120,9 +169,10 @@ Options:
   --test-draft                   Upload a tiny draft for API/auth validation.
   --dry-run                      Build the payload but do not call X.
   --output FILE                  Write the built payload or API response JSON.
-  --preprocess                   Run preprocess.py before parsing Markdown.
-  --base-url URL                 Base URL passed to preprocess.py for relative links.
-  --h3-as-bold                   Pass --h3-as-bold to preprocess.py.
+  --prepare-markdown             Write prepared Markdown for xPoster and do not call X.
+  --preprocess                   Prepare Markdown around parsing.
+  --base-url URL                 Base URL used to resolve relative links/images when preprocessing.
+  --h3-as-bold                   Convert H3 headings to bold paragraphs when preprocessing.
   --smart-punctuation            Enable xPoster's smart punctuation parser option.
   --plain-special-blocks         Convert code/table/tweet/divider blocks to plain text.
   --render-special-blocks-as-images
@@ -155,6 +205,7 @@ function parseArgs(argv) {
     testDraft: false,
     dryRun: false,
     output: "",
+    prepareMarkdown: false,
     preprocess: false,
     baseUrl: "",
     h3AsBold: false,
@@ -192,6 +243,7 @@ function parseArgs(argv) {
     else if (arg === "--test-draft") args.testDraft = true;
     else if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "--output" || arg === "-o") args.output = next();
+    else if (arg === "--prepare-markdown") args.prepareMarkdown = true;
     else if (arg === "--preprocess") args.preprocess = true;
     else if (arg === "--base-url") args.baseUrl = next();
     else if (arg === "--h3-as-bold") args.h3AsBold = true;
@@ -218,6 +270,7 @@ function parseArgs(argv) {
     else throw new Error(`Unexpected argument: ${arg}`);
   }
 
+  if (args.prepareMarkdown) args.preprocess = true;
   return args;
 }
 
@@ -236,25 +289,428 @@ function readInputMarkdown(args) {
   return fs.readFileSync(args.input, "utf8");
 }
 
-function maybePreprocessMarkdown(markdown, args) {
-  if (!args.preprocess) return markdown;
+function regexEscape(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-  const script = path.resolve(__dirname, "..", "preprocess.py");
-  const command = ["python3", script];
-  if (args.baseUrl) command.push("--base-url", args.baseUrl);
-  if (args.h3AsBold) command.push("--h3-as-bold");
-  command.push("-");
+function fenceCloseRe(marker) {
+  return new RegExp(`^[ \\t]{0,3}${regexEscape(marker[0])}{${marker.length},}[ \\t]*$`);
+}
 
-  const result = spawnSync(command[0], command.slice(1), {
-    input: markdown,
-    encoding: "utf8",
-    maxBuffer: 50 * 1024 * 1024
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(`preprocess.py failed: ${result.stderr || result.stdout || `exit ${result.status}`}`);
+function stripLineEnd(value) {
+  return String(value).replace(/[\n\r]+$/g, "");
+}
+
+function stripHtmlCommentsOutsideFences(markdown) {
+  const lines = String(markdown ?? "").match(/[^\n]*\n|[^\n]+$/g) || [];
+  const output = [];
+  let inFence = false;
+  let closeRe = null;
+  let inComment = false;
+
+  for (const originalLine of lines) {
+    const lineForMatch = stripLineEnd(originalLine);
+
+    if (inFence) {
+      output.push(originalLine);
+      if (closeRe?.test(lineForMatch)) {
+        inFence = false;
+        closeRe = null;
+      }
+      continue;
+    }
+
+    const opener = lineForMatch.match(FENCE_OPEN_RE);
+    if (opener) {
+      output.push(originalLine);
+      inFence = true;
+      closeRe = fenceCloseRe(opener[2]);
+      continue;
+    }
+
+    let rebuilt = "";
+    let cursor = 0;
+    while (cursor < originalLine.length) {
+      if (inComment) {
+        const end = originalLine.indexOf("-->", cursor);
+        if (end < 0) break;
+        cursor = end + 3;
+        inComment = false;
+        continue;
+      }
+
+      const start = originalLine.indexOf("<!--", cursor);
+      if (start < 0) {
+        rebuilt += originalLine.slice(cursor);
+        break;
+      }
+
+      rebuilt += originalLine.slice(cursor, start);
+      const end = originalLine.indexOf("-->", start + 4);
+      if (end < 0) {
+        inComment = true;
+        break;
+      }
+      cursor = end + 3;
+    }
+    output.push(rebuilt);
   }
-  return result.stdout;
+
+  const stripped = output.join("");
+  return `${stripped.trim()}\n`;
+}
+
+function maybePrepareMarkdownBeforeParse(markdown, args) {
+  if (!args.preprocess) return markdown;
+  return stripHtmlCommentsOutsideFences(markdown);
+}
+
+function monospaceText(value) {
+  let output = "";
+  for (const char of String(value ?? "")) {
+    if (char >= "A" && char <= "Z") output += String.fromCodePoint(MONO_UPPER_A + char.charCodeAt(0) - 65);
+    else if (char >= "a" && char <= "z") output += String.fromCodePoint(MONO_LOWER_A + char.charCodeAt(0) - 97);
+    else if (char >= "0" && char <= "9") output += String.fromCodePoint(MONO_DIGIT_0 + char.charCodeAt(0) - 48);
+    else if (char === "*") output += "\u2217";
+    else output += char;
+  }
+  return output;
+}
+
+function normalizeBaseUrl(baseUrl) {
+  const value = String(baseUrl || "").trim();
+  if (!value) return "";
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
+function isAbsoluteOrSpecialTarget(target) {
+  const value = String(target || "").trim();
+  return Boolean(
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value) ||
+      value.startsWith("#") ||
+      value.startsWith("//")
+  );
+}
+
+function rewriteTargetWithBase(target, baseUrl) {
+  const value = String(target || "").trim();
+  const base = normalizeBaseUrl(baseUrl);
+  if (!base || isAbsoluteOrSpecialTarget(value)) return value;
+  try {
+    return new URL(value, base).href;
+  } catch {
+    return value;
+  }
+}
+
+function rewriteMarkdownLinkTargets(value, baseUrl) {
+  const base = normalizeBaseUrl(baseUrl);
+  if (!base) return String(value || "");
+  return String(value || "").replace(/(!?\[[^\]]*\]\()([^)]+)(\))/g, (match, prefix, target, suffix) => {
+    return `${prefix}${rewriteTargetWithBase(target, base)}${suffix}`;
+  });
+}
+
+function normalizeLanguageLabel(language) {
+  const value = String(language || "");
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  const [label, ...rest] = trimmed.split(/\s+/);
+  const normalized = LANGUAGE_ALIASES.get(label.toLowerCase()) || label;
+  return [normalized, ...rest].join(" ");
+}
+
+function findBacktickCodeReplacements(text, occupiedRanges = []) {
+  const replacements = [];
+  let cursor = 0;
+  const overlapsOccupied = (start, end) =>
+    occupiedRanges.some((range) => start < range.end && end > range.start);
+
+  while (cursor < text.length) {
+    const start = text.indexOf("`", cursor);
+    if (start < 0) break;
+
+    let markerEnd = start;
+    while (markerEnd < text.length && text[markerEnd] === "`") markerEnd += 1;
+    const marker = text.slice(start, markerEnd);
+    const end = text.indexOf(marker, markerEnd);
+    if (end < 0) break;
+
+    const replacementEnd = end + marker.length;
+    if (!overlapsOccupied(start, replacementEnd)) {
+      replacements.push({
+        start,
+        end: replacementEnd,
+        text: monospaceText(text.slice(markerEnd, end))
+      });
+    }
+    cursor = replacementEnd;
+  }
+
+  return replacements;
+}
+
+function applyTextReplacements(segment, replacements, { dropCodeRanges = false } = {}) {
+  const text = String(segment.text || "");
+  const sorted = replacements
+    .filter((replacement) => replacement.end > replacement.start)
+    .sort((left, right) => left.start - right.start);
+  if (!sorted.length) return segment;
+
+  let nextText = "";
+  let cursor = 0;
+  for (const replacement of sorted) {
+    if (replacement.start < cursor) continue;
+    nextText += text.slice(cursor, replacement.start);
+    nextText += replacement.text;
+    cursor = replacement.end;
+  }
+  nextText += text.slice(cursor);
+
+  const mapPosition = (position, preferEnd = false) => {
+    let delta = 0;
+    for (const replacement of sorted) {
+      if (position < replacement.start) break;
+      const oldLength = replacement.end - replacement.start;
+      const newLength = replacement.text.length;
+      if (position > replacement.start && position < replacement.end) {
+        return replacement.start + delta + (preferEnd ? newLength : 0);
+      }
+      if (position === replacement.start) return replacement.start + delta;
+      delta += newLength - oldLength;
+    }
+    return position + delta;
+  };
+
+  const inlineStyleRanges = (segment.inlineStyleRanges || [])
+    .filter((range) => !dropCodeRanges || range.style !== "Code")
+    .map((range) => {
+      const start = mapPosition(range.offset);
+      const end = mapPosition(range.offset + range.length, true);
+      return { ...range, offset: start, length: Math.max(0, end - start) };
+    })
+    .filter((range) => range.length > 0);
+  const links = (segment.links || [])
+    .map((link) => {
+      const start = mapPosition(link.offset);
+      const end = mapPosition(link.offset + link.length, true);
+      return { ...link, offset: start, length: Math.max(0, end - start) };
+    })
+    .filter((link) => link.length > 0);
+
+  return { ...segment, text: nextText, inlineStyleRanges, links };
+}
+
+function transformInlineCodeInTextSegment(segment) {
+  const text = String(segment.text || "");
+  const codeRanges = (segment.inlineStyleRanges || [])
+    .filter((range) => range.style === "Code" && range.length > 0)
+    .map((range) => ({
+      start: range.offset,
+      end: range.offset + range.length,
+      text: monospaceText(text.slice(range.offset, range.offset + range.length))
+    }));
+  const backtickReplacements = findBacktickCodeReplacements(text, codeRanges);
+  return applyTextReplacements(segment, [...codeRanges, ...backtickReplacements], { dropCodeRanges: true });
+}
+
+function convertMarkdownInlineCodeText(value) {
+  const segment = {
+    type: "text",
+    kind: "unstyled",
+    text: String(value || ""),
+    inlineStyleRanges: [],
+    links: []
+  };
+  return transformInlineCodeInTextSegment(segment).text;
+}
+
+function prepareMarkdownCell(value, args) {
+  return rewriteMarkdownLinkTargets(convertMarkdownInlineCodeText(value), args.baseUrl);
+}
+
+function maybePostprocessParsed(parsed, args) {
+  if (!args.preprocess) return parsed;
+
+  const segments = (parsed.segments || []).map((segment) => {
+    if (segment.type === "text") {
+      let next = transformInlineCodeInTextSegment(segment);
+      if (args.baseUrl) {
+        next = {
+          ...next,
+          links: (next.links || []).map((link) => ({ ...link, url: rewriteTargetWithBase(link.url, args.baseUrl) }))
+        };
+      }
+      if (args.h3AsBold && next.kind === "header-three") {
+        const existing = next.inlineStyleRanges || [];
+        next = {
+          ...next,
+          kind: "unstyled",
+          inlineStyleRanges: [{ offset: 0, length: next.text.length, style: "Bold" }, ...existing]
+        };
+      }
+      return next;
+    }
+
+    if (segment.type === "image") {
+      return {
+        ...segment,
+        alt: convertMarkdownInlineCodeText(segment.alt || ""),
+        source: args.baseUrl ? rewriteTargetWithBase(segment.source, args.baseUrl) : segment.source
+      };
+    }
+
+    if (segment.type === "code") {
+      return { ...segment, language: normalizeLanguageLabel(segment.language) };
+    }
+
+    if (segment.type === "table") {
+      return {
+        ...segment,
+        headers: (segment.headers || []).map((cell) => prepareMarkdownCell(cell, args)),
+        rows: (segment.rows || []).map((row) => row.map((cell) => prepareMarkdownCell(cell, args)))
+      };
+    }
+
+    return segment;
+  });
+
+  return { ...parsed, segments };
+}
+
+function markdownEscapeLinkTarget(value) {
+  return String(value ?? "").replace(/\)/g, "%29");
+}
+
+function insertMarkdownWrappers(text, wrappers) {
+  const inserts = new Map();
+  const addInsert = (offset, value, order) => {
+    if (!inserts.has(offset)) inserts.set(offset, []);
+    inserts.get(offset).push({ value, order });
+  };
+
+  for (const wrapper of wrappers) {
+    if (wrapper.length <= 0) continue;
+    addInsert(wrapper.offset, wrapper.open, wrapper.openOrder);
+    addInsert(wrapper.offset + wrapper.length, wrapper.close, wrapper.closeOrder);
+  }
+
+  let output = "";
+  for (let index = 0; index <= text.length; index += 1) {
+    const items = inserts.get(index);
+    if (items) {
+      items
+        .sort((left, right) => left.order - right.order)
+        .forEach((item) => {
+          output += item.value;
+        });
+    }
+    if (index < text.length) output += text[index];
+  }
+  return output;
+}
+
+function markdownInlineFromTextSegment(segment) {
+  const text = String(segment.text || "");
+  const wrappers = [];
+
+  for (const link of segment.links || []) {
+    wrappers.push({
+      offset: link.offset,
+      length: link.length,
+      open: "[",
+      close: `](${markdownEscapeLinkTarget(link.url)})`,
+      openOrder: 30,
+      closeOrder: 10
+    });
+  }
+
+  for (const range of segment.inlineStyleRanges || []) {
+    const style = range.style;
+    const marker = style === "Bold" ? "**" : style === "Italic" ? "*" : style === "Strikethrough" ? "~~" : "";
+    if (!marker) continue;
+    wrappers.push({
+      offset: range.offset,
+      length: range.length,
+      open: marker,
+      close: marker,
+      openOrder: 20,
+      closeOrder: 20
+    });
+  }
+
+  return insertMarkdownWrappers(text, wrappers);
+}
+
+function preparedTextSegmentToMarkdown(segment) {
+  const value = markdownInlineFromTextSegment(segment);
+  if (!value) return "";
+
+  switch (segment.kind) {
+    case "header-one":
+      return `# ${value}`;
+    case "header-two":
+      return `## ${value}`;
+    case "header-three":
+      return `### ${value}`;
+    case "header-four":
+      return `#### ${value}`;
+    case "header-five":
+      return `##### ${value}`;
+    case "header-six":
+      return `###### ${value}`;
+    case "blockquote":
+      return value
+        .split("\n")
+        .map((line) => `> ${line}`)
+        .join("\n");
+    case "unordered-list-item":
+      return value
+        .split("\n")
+        .map((line, index) => (index === 0 ? `- ${line}` : `  ${line}`))
+        .join("\n");
+    case "ordered-list-item":
+      return value
+        .split("\n")
+        .map((line, index) => (index === 0 ? `1. ${line}` : `   ${line}`))
+        .join("\n");
+    default:
+      return value;
+  }
+}
+
+function codeFenceMarkdown(segment) {
+  const code = String(segment.code || "");
+  const marker = code.includes("```") ? "~~~" : "```";
+  return `${marker}${segment.language || ""}\n${code}\n${marker}`;
+}
+
+function preparedSegmentToMarkdown(segment) {
+  if (segment.type === "text") return preparedTextSegmentToMarkdown(segment);
+  if (segment.type === "image") return imageFallbackMarkdown(segment);
+  if (segment.type === "code") return codeFenceMarkdown(segment);
+  if (segment.type === "table") return tableToMarkdown(segment);
+  if (segment.type === "tweet") return `https://x.com/i/web/status/${segment.tweetId}`;
+  if (segment.type === "divider") return "---";
+  return segmentFallbackText(segment);
+}
+
+function preparedMarkdownFromParsed(parsed, args) {
+  const parts = [];
+  const title = args.title || parsed.title || "";
+  if (title) parts.push(`# ${title}`);
+
+  for (const segment of parsed.segments || []) {
+    const markdown = preparedSegmentToMarkdown(segment).trim();
+    if (markdown) parts.push(markdown);
+  }
+
+  return `${parts.join("\n\n").trim()}\n`;
+}
+
+function writeTextOrPrint(value, outputPath) {
+  if (outputPath) fs.writeFileSync(outputPath, value);
+  else process.stdout.write(value);
 }
 
 function makeBlockKey(index) {
@@ -1192,8 +1648,13 @@ async function main() {
     return;
   }
 
-  const markdown = maybePreprocessMarkdown(readInputMarkdown(args), args);
-  const parsed = parseArticleMarkdown(markdown, args);
+  const markdown = maybePrepareMarkdownBeforeParse(readInputMarkdown(args), args);
+  const parsed = maybePostprocessParsed(parseArticleMarkdown(markdown, args), args);
+  if (args.prepareMarkdown) {
+    writeTextOrPrint(preparedMarkdownFromParsed(parsed, args), args.output);
+    return;
+  }
+
   warnArticleInputs(parsed, args);
   const dryRunUploads = args.skipMedia ? new Map() : mockImageUploads(parsed);
   const dryRunSpecialUploads = args.renderSpecialBlocksAsImages ? mockSpecialBlockUploads(parsed) : new Map();

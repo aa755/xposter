@@ -134,36 +134,29 @@ In this example, xPoster can use the frontmatter title, try the cover image, upl
 
 A smoke-test draft is included at [fixtures/live-x-smoke.md](fixtures/live-x-smoke.md).
 
-## Optional Markdown Preprocessing
+## Prepare Markdown Without The X API
 
-For Markdown exported from another blog or static site, run the dependency-free
-preprocessor before loading the draft into xPoster:
+If you want to use the Chrome extension flow but clean up Markdown first, run
+the local preparation mode:
 
 ```bash
-python3 preprocess.py article.md \
+node scripts/upload-x-article.js article.md \
+  --prepare-markdown \
   --base-url https://example.com/blog/post/ \
-  --h3-as-bold \
-  -o article.xposter.md
+  --output article.xposter.md
 ```
 
-The preprocessor can:
+This does not contact X, does not need OAuth, and does not create a draft. It
+writes Markdown you can paste into xPoster or load as a `.md` file. Use
+`--base-url` when the source Markdown has relative links or images that should
+become public absolute URLs. Add `--h3-as-bold` if third-level headings should
+become bold paragraphs for X Article rendering.
 
-- remove HTML comments outside fenced code blocks
-- turn relative Markdown links and images into absolute URLs when `--base-url`
-  is supplied
-- convert inline code spans to Unicode monospace text
-- keep protective code spans around converted identifiers with `_`, so xPoster's
-  Markdown parser does not mistake underscores for italics
-- normalize common code-fence aliases to language labels X is more likely to
-  highlight, for example `c++` -> `cpp`, `js` -> `javascript`, `py` -> `python`,
-  `yml` -> `yaml`, and `sh` -> `bash`
-- convert `###` headings to bold paragraphs with `--h3-as-bold`, useful when X
-  Articles do not render third-level headings distinctly
-
-List the built-in language aliases with:
+Omit `--output` to print the prepared Markdown to stdout. On macOS, you can copy
+it directly with:
 
 ```bash
-python3 preprocess.py --list-language-aliases
+node scripts/upload-x-article.js article.md --prepare-markdown | pbcopy
 ```
 
 ## Images
