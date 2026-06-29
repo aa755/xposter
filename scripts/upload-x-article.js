@@ -16,22 +16,20 @@
  *     --preprocess \
  *     --base-url https://example.com/blog/post/ \
  *     --upload-images \
- *     --render-special-blocks-as-images \
  *     --open-draft
  *   node scripts/upload-x-article.js article.md \
  *     --preprocess \
  *     --base-url https://example.com/blog/post/ \
  *     --upload-images \
- *     --render-special-blocks-as-images \
  *     --publish
  *
  * Markdown and formatting:
  *   - The script parses Markdown through xPoster's shared parser and converts
  *     it into X's Draft.js-shaped Article payload.
- *   - X's public Article API does not expose native code/table block creation.
- *     Use --render-special-blocks-as-images to render fenced code blocks and
- *     tables to PNGs with local headless Chrome, upload those PNGs, and place
- *     them as Article images.
+ *   - Code blocks and tables are sent as Markdown blocks by default. X accepts
+ *     these as Article "link" entities with data.markdown. The optional
+ *     --render-special-blocks-as-images mode is only for non-interactive blocks;
+ *     linked tables always stay as Markdown so their links are not destroyed.
  *   - Use --preprocess to prepare Markdown around parsing. That strips HTML
  *     comments before parsing, then normalizes fence language aliases such as
  *     c++ -> cpp, converts inline code spans to Unicode monospace text, and can
@@ -176,7 +174,7 @@ Options:
   --smart-punctuation            Enable xPoster's smart punctuation parser option.
   --plain-special-blocks         Convert code/table/tweet/divider blocks to plain text.
   --render-special-blocks-as-images
-                                  Render table/code blocks to PNGs and upload them as images.
+                                  Optional fallback: render code/plain tables as PNG images.
   --upload-images                Upload http(s) and local Markdown images as Article image entities.
   --skip-media                   Convert image blocks to Markdown text. Default behavior.
   --markdown-entity-type TYPE    Entity type for code/table Markdown atomics. Default: link.
@@ -409,6 +407,23 @@ function rewriteMarkdownLinkTargets(value, baseUrl) {
   return String(value || "").replace(/(!?\[[^\]]*\]\()([^)]+)(\))/g, (match, prefix, target, suffix) => {
     return `${prefix}${rewriteTargetWithBase(target, base)}${suffix}`;
   });
+}
+
+function hasMarkdownLink(value) {
+  return /\[[^\]]+\]\([^)]+\)/.test(String(value || ""));
+}
+
+function tableHasMarkdownLinks(table) {
+  return [
+    ...(table.headers || []),
+    ...(table.rows || []).flat()
+  ].some(hasMarkdownLink);
+}
+
+function shouldRenderSpecialBlockAsImage(segment) {
+  if (segment.type === "code") return true;
+  if (segment.type === "table") return !tableHasMarkdownLinks(segment);
+  return false;
 }
 
 function normalizeLanguageLabel(language) {
@@ -1278,7 +1293,7 @@ async function uploadRenderedSpecialBlocksForParsed(parsed, args, accessToken) {
 
   let index = 1;
   for (const segment of parsed.segments || []) {
-    if (segment.type !== "table" && segment.type !== "code") continue;
+    if (!shouldRenderSpecialBlockAsImage(segment)) continue;
     const image = renderSpecialBlockImage(segment, args, index++);
     const uploaded = await uploadMedia(image, accessToken);
     uploads.set(segment, uploaded);
@@ -1307,7 +1322,7 @@ function mockSpecialBlockUploads(parsed) {
   const uploads = new Map();
   let index = 1;
   for (const segment of parsed.segments || []) {
-    if (segment.type !== "table" && segment.type !== "code") continue;
+    if (!shouldRenderSpecialBlockAsImage(segment)) continue;
     uploads.set(segment, {
       media_id: `special-${index++}`,
       article_media_category: "TWEET_IMAGE",
@@ -1595,9 +1610,11 @@ function warnArticleInputs(parsed, args) {
     warnings.push("--base-url was supplied without --preprocess, so relative Markdown links/images will not be rewritten.");
   }
 
-  let specialBlockCount = 0;
+  let linkedTableCount = 0;
   for (const segment of parsed.segments || []) {
-    if (segment.type === "code" || segment.type === "table") specialBlockCount += 1;
+    if (segment.type === "table") {
+      if (tableHasMarkdownLinks(segment)) linkedTableCount += 1;
+    }
 
     if (segment.type === "text") {
       for (const link of segment.links || []) {
@@ -1628,10 +1645,9 @@ function warnArticleInputs(parsed, args) {
     }
   }
 
-  if (specialBlockCount && !args.renderSpecialBlocksAsImages && !args.plainSpecialBlocks) {
+  if (linkedTableCount && args.renderSpecialBlocksAsImages) {
     warnings.push(
-      `${specialBlockCount} table/code block(s) found. X's public Article API does not create native table/code blocks; ` +
-        "use --render-special-blocks-as-images for readable rendering."
+      `${linkedTableCount} linked table(s) will stay as Markdown because rendering them as images would remove links.`
     );
   }
 
