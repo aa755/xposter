@@ -49,12 +49,28 @@
  *     resolve and image sources that --upload-images cannot read or download.
  *
  * Authentication:
- *   - X_BEARER_TOKEN or TWITTER_BEARER_TOKEN: use an existing user access token.
- *   - X_CLIENT_ID or TWITTER_CLIENT_ID: run OAuth2 PKCE.
- *   - X_CLIENT_SECRET or TWITTER_CLIENT_SECRET: optional confidential-client
- *     secret.
- *   - OAuth tokens are cached at ~/.config/xposter/x-oauth-token.json by
- *     default. The app's OAuth2 callback URL must exactly match --redirect-uri.
+ *   - Tested setup: go to https://developer.x.com/, create a project/app if you
+ *     do not already have one, and add API credits/billing. In the session that
+ *     produced this script, Article API calls did not work until paid credits
+ *     were added.
+ *   - In the app's user-auth settings, enable OAuth 2.0 with write-capable
+ *     permissions. Add this callback/redirect URL exactly:
+ *       http://127.0.0.1:8765/callback
+ *     You normally should not change it. Only pick another localhost URL if
+ *     port 8765 is already in use, and then pass the same value to this script
+ *     with --redirect-uri.
+ *   - Get the app's OAuth2 Client ID from the Developer Portal app settings and
+ *     pass it as --client-id, X_CLIENT_ID, or TWITTER_CLIENT_ID. The script will
+ *     open the browser for approval, then cache the access/refresh tokens at
+ *     ~/.config/xposter/x-oauth-token.json by default.
+ *   - Reuse path: after the tested OAuth flow has cached tokens, rerun the
+ *     script without --client-id. It reads the cache and refreshes the access
+ *     token when needed.
+ *   - Untested escape hatch: X_BEARER_TOKEN or TWITTER_BEARER_TOKEN may be set
+ *     to an existing user OAuth access token with the required scopes. This is
+ *     intentionally not an app-only bearer token.
+ *   - Untested optional path: X_CLIENT_SECRET or TWITTER_CLIENT_SECRET may be
+ *     supplied for a confidential OAuth client.
  *
  * API calls:
  *   - Create draft: POST https://api.x.com/2/articles/draft
