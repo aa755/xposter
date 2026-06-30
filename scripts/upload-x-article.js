@@ -35,7 +35,7 @@
  *     link entities because rendering them as images would destroy the links.
  *   - --experimental-markdown-atomics keeps the failed data.markdown encoding
  *     available for future X API experiments, but it is not the default.
- *   - Use --preprocess to prepare Markdown around parsing. That strips HTML
+ *   - Use --preprocess to prepare Markdown for the Xposter chrome plugin. That strips HTML
  *     comments before parsing, then normalizes fence language aliases such as
  *     c++ -> cpp, converts inline code spans to Unicode monospace text, and can
  *     rewrite Markdown links/images after parsing.
