@@ -159,6 +159,21 @@ it directly with:
 node scripts/upload-x-article.js article.md --prepare-markdown | pbcopy
 ```
 
+## X Article API Uploader
+
+The `scripts/upload-x-article.js` API uploader can create draft-only Articles
+through X's public Article API. It is separate from the Chrome extension flow.
+The API accepts Draft.js-shaped `content_state`, but browser testing on
+2026-06-29 showed that `data.markdown` table/code atomics are accepted by the
+API and then render as blank blocks in X Article preview.
+
+Because of that, the API uploader keeps fenced code and tables visible as text
+by default. Use `--render-special-blocks-as-images` when visual table/code
+fidelity is more important than interactivity. Linked tables remain text rows
+with link entities so their links are not destroyed. The
+`--experimental-markdown-atomics` flag keeps the failed `data.markdown` encoding
+available for future X API testing, but it is not recommended for publishing.
+
 ## Images
 
 **Local images**: keep image files near your Markdown file and choose the matching local image folder when xPoster asks. Relative paths like `./images/photo.png` work only after Chrome grants xPoster access to that folder.

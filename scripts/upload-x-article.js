@@ -26,10 +26,15 @@
  * Markdown and formatting:
  *   - The script parses Markdown through xPoster's shared parser and converts
  *     it into X's Draft.js-shaped Article payload.
- *   - Code blocks and tables are sent as Markdown blocks by default. X accepts
- *     these as Article "link" entities with data.markdown. The optional
- *     --render-special-blocks-as-images mode is only for non-interactive blocks;
- *     linked tables always stay as Markdown so their links are not destroyed.
+ *   - Browser-tested API limitation: on 2026-06-29, X accepted Article
+ *     entities with data.markdown, but the X Article editor/preview rendered
+ *     those table/code atomics as blank blocks. The default API path therefore
+ *     keeps code and tables visible as ordinary text blocks.
+ *   - Use --render-special-blocks-as-images if visual table/code fidelity is
+ *     more important than interactivity. Linked tables stay as text rows with
+ *     link entities because rendering them as images would destroy the links.
+ *   - --experimental-markdown-atomics keeps the failed data.markdown encoding
+ *     available for future X API experiments, but it is not the default.
  *   - Use --preprocess to prepare Markdown around parsing. That strips HTML
  *     comments before parsing, then normalizes fence language aliases such as
  *     c++ -> cpp, converts inline code spans to Unicode monospace text, and can
@@ -174,10 +179,12 @@ Options:
   --smart-punctuation            Enable xPoster's smart punctuation parser option.
   --plain-special-blocks         Convert code/table/tweet/divider blocks to plain text.
   --render-special-blocks-as-images
-                                  Optional fallback: render code/plain tables as PNG images.
+                                  Optional fallback: render code/non-linked tables as PNG images.
   --upload-images                Upload http(s) and local Markdown images as Article image entities.
   --skip-media                   Convert image blocks to Markdown text. Default behavior.
-  --markdown-entity-type TYPE    Entity type for code/table Markdown atomics. Default: link.
+  --experimental-markdown-atomics
+                                  Send code/table as data.markdown atomics. Browser-tested blank on 2026-06-29.
+  --markdown-entity-type TYPE    Entity type for --experimental-markdown-atomics. Default: link.
   --chrome-path PATH             Chrome binary for --render-special-blocks-as-images.
   --publish                      Publish the created draft Article after creation.
   --publish-existing ARTICLE_ID  Publish an existing draft Article without creating a new draft.
@@ -211,6 +218,7 @@ function parseArgs(argv) {
     plainSpecialBlocks: false,
     renderSpecialBlocksAsImages: false,
     skipMedia: true,
+    experimentalMarkdownAtomics: false,
     markdownEntityType: process.env.X_ARTICLE_MARKDOWN_ENTITY_TYPE || "link",
     chromePath: process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     publish: false,
@@ -250,6 +258,7 @@ function parseArgs(argv) {
     else if (arg === "--render-special-blocks-as-images") args.renderSpecialBlocksAsImages = true;
     else if (arg === "--upload-images") args.skipMedia = false;
     else if (arg === "--skip-media") args.skipMedia = true;
+    else if (arg === "--experimental-markdown-atomics") args.experimentalMarkdownAtomics = true;
     else if (arg === "--markdown-entity-type") args.markdownEntityType = next();
     else if (arg === "--chrome-path") args.chromePath = next();
     else if (arg === "--publish") args.publish = true;
@@ -1042,6 +1051,61 @@ function plainTextSegment(text, kind = "unstyled") {
   };
 }
 
+function appendTextSegment(left, right, separator = "") {
+  const offset = String(left.text || "").length + String(separator || "").length;
+  return {
+    ...left,
+    text: `${left.text || ""}${separator || ""}${right.text || ""}`,
+    inlineStyleRanges: [
+      ...(left.inlineStyleRanges || []),
+      ...(right.inlineStyleRanges || []).map((range) => ({ ...range, offset: range.offset + offset }))
+    ],
+    links: [
+      ...(left.links || []),
+      ...(right.links || []).map((link) => ({ ...link, offset: link.offset + offset }))
+    ]
+  };
+}
+
+function inlineMarkdownToTextSegment(value) {
+  const parsed = shared.parseMarkdown(String(value || ""), {
+    extractTitle: false,
+    extractCover: false
+  });
+  const textSegments = (parsed.segments || []).filter((segment) => segment.type === "text");
+  if (!textSegments.length) return plainTextSegment(String(value || ""));
+
+  let output = plainTextSegment("");
+  for (const segment of textSegments) {
+    output = appendTextSegment(output, segment, output.text ? " " : "");
+  }
+  return output;
+}
+
+function tableRowToTextSegment(cells) {
+  let output = plainTextSegment("");
+  for (let index = 0; index < cells.length; index += 1) {
+    const cell = inlineMarkdownToTextSegment(cells[index]);
+    output = appendTextSegment(output, cell, index ? " | " : "");
+  }
+  return output;
+}
+
+function tableToPlainTextSegments(table) {
+  const segments = [];
+  segments.push(tableRowToTextSegment(table.headers || []));
+  if (table.alignments?.length) {
+    segments.push(plainTextSegment(table.alignments.map(() => "---").join(" | ")));
+  }
+  for (const row of table.rows || []) segments.push(tableRowToTextSegment(row));
+  return segments;
+}
+
+function apiFallbackSegmentsForSpecialBlock(segment) {
+  if (segment.type === "table") return tableToPlainTextSegments(segment);
+  return [plainTextSegment(segmentFallbackText(segment))];
+}
+
 function segmentFallbackText(segment) {
   if (segment.type === "code") return `\`\`\`${segment.language || ""}\n${segment.code || ""}\n\`\`\``;
   if (segment.type === "table") return tableToMarkdown(segment);
@@ -1099,14 +1163,14 @@ function contentStateFromSegments(segments, options = {}) {
       continue;
     }
 
-    if (segment.type === "code") {
-      addAtomic(options.markdownEntityType, {
-        markdown: `\`\`\`${segment.language || ""}\n${segment.code || ""}\n\`\`\``
-      });
-      continue;
-    }
-    if (segment.type === "table") {
-      addAtomic(options.markdownEntityType, { markdown: tableToMarkdown(segment) });
+    if (segment.type === "code" || segment.type === "table") {
+      if (options.experimentalMarkdownAtomics) {
+        addAtomic(options.markdownEntityType, {
+          markdown: segment.type === "code" ? codeFenceMarkdown(segment) : tableToMarkdown(segment)
+        });
+      } else {
+        for (const fallbackSegment of apiFallbackSegmentsForSpecialBlock(segment)) addText(fallbackSegment);
+      }
       continue;
     }
     if (segment.type === "tweet") {
@@ -1155,6 +1219,7 @@ function buildPayloadFromParsed(parsed, args, imageUploads = new Map(), specialB
     title,
     content_state: contentStateFromSegments(parsed.segments, {
       plainSpecialBlocks: args.plainSpecialBlocks,
+      experimentalMarkdownAtomics: args.experimentalMarkdownAtomics,
       markdownEntityType: args.markdownEntityType,
       imageUploads,
       specialBlockUploads
@@ -1611,9 +1676,22 @@ function warnArticleInputs(parsed, args) {
   }
 
   let linkedTableCount = 0;
+  let apiTextSpecialCount = 0;
+  let apiExperimentalMarkdownAtomicCount = 0;
   for (const segment of parsed.segments || []) {
     if (segment.type === "table") {
       if (tableHasMarkdownLinks(segment)) linkedTableCount += 1;
+    }
+
+    if (segment.type === "code" || segment.type === "table") {
+      if (args.experimentalMarkdownAtomics) {
+        apiExperimentalMarkdownAtomicCount += 1;
+      } else if (
+        !args.plainSpecialBlocks &&
+        !(args.renderSpecialBlocksAsImages && shouldRenderSpecialBlockAsImage(segment))
+      ) {
+        apiTextSpecialCount += 1;
+      }
     }
 
     if (segment.type === "text") {
@@ -1647,7 +1725,21 @@ function warnArticleInputs(parsed, args) {
 
   if (linkedTableCount && args.renderSpecialBlocksAsImages) {
     warnings.push(
-      `${linkedTableCount} linked table(s) will stay as Markdown because rendering them as images would remove links.`
+      `${linkedTableCount} linked table(s) will stay as visible text rows with link entities because rendering them as images would remove links.`
+    );
+  }
+
+  if (apiTextSpecialCount) {
+    warnings.push(
+      `${apiTextSpecialCount} code/table block(s) will be sent as visible text. ` +
+        "The public Article API accepts data.markdown entities, but browser testing on 2026-06-29 showed they render as blank blocks."
+    );
+  }
+
+  if (apiExperimentalMarkdownAtomicCount) {
+    warnings.push(
+      `${apiExperimentalMarkdownAtomicCount} code/table block(s) will use experimental data.markdown atomics. ` +
+        "Browser testing on 2026-06-29 showed this encoding renders as blank blocks in X Article preview."
     );
   }
 
