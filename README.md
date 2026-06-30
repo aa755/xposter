@@ -147,10 +147,15 @@ node scripts/upload-x-article.js article.md \
 ```
 
 This does not contact X, does not need OAuth, and does not create a draft. It
-writes Markdown you can paste into xPoster or load as a `.md` file. Use
-`--base-url` when the source Markdown has relative links or images that should
-become public absolute URLs. Add `--h3-as-bold` if third-level headings should
-become bold paragraphs for X Article rendering.
+writes Markdown you can paste into xPoster or load as a `.md` file.
+
+Useful options:
+
+- `--base-url URL`: rewrites relative links and image paths to public absolute
+  URLs. Use this when the source Markdown has links such as `appendix.html` or
+  images such as `assets/diagram.png`.
+- `--h3-as-bold`: converts third-level headings to bold paragraphs for X
+  Article rendering.
 
 Omit `--output` to print the prepared Markdown to stdout. On macOS, you can copy
 it directly with:
