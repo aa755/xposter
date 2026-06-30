@@ -13,12 +13,10 @@
  *     --output article.xposter.md
  *   node scripts/upload-x-article.js article.md --dry-run --output payload.json
  *   node scripts/upload-x-article.js article.md \
- *     --preprocess \
  *     --base-url https://example.com/blog/post/ \
  *     --upload-images \
  *     --open-draft
  *   node scripts/upload-x-article.js article.md \
- *     --preprocess \
  *     --base-url https://example.com/blog/post/ \
  *     --upload-images \
  *     --publish
@@ -28,21 +26,17 @@
  *     it into X's Draft.js-shaped Article payload.
  *   - Browser-tested API limitation: on 2026-06-29, X accepted Article
  *     entities with data.markdown, but the X Article editor/preview rendered
- *     those table/code atomics as blank blocks. The default API path therefore
- *     keeps code and tables visible as ordinary text blocks.
- *   - Use --render-special-blocks-as-images if visual table/code fidelity is
- *     more important than interactivity. Linked tables stay as text rows with
- *     link entities because rendering them as images would destroy the links.
- *   - --experimental-markdown-atomics keeps the failed data.markdown encoding
- *     available for future X API experiments, but it is not the default.
- *   - Use --preprocess to prepare Markdown for the Xposter chrome plugin. That strips HTML
- *     comments before parsing, then normalizes fence language aliases such as
- *     c++ -> cpp, converts inline code spans to Unicode monospace text, and can
- *     rewrite Markdown links/images after parsing.
+ *     those table/code atomics as blank blocks. The API uploader therefore
+ *     refuses Markdown table/code blocks instead of degrading them to plain
+ *     text.
+ *   - Markdown cleanup is always applied before output or upload: HTML comments
+ *     are stripped, fence language aliases such as c++ are normalized to cpp,
+ *     inline code spans become Unicode monospace text, and --base-url can make
+ *     Markdown links/images absolute.
  *
  * Assets and links:
- *   - --base-url only has an effect with --preprocess. It rewrites relative
- *     Markdown links and image sources in the input document to absolute URLs.
+ *   - --base-url rewrites relative Markdown links and image sources in the
+ *     input document to absolute URLs.
  *   - --upload-images uploads Markdown image sources by bytes. http:// and
  *     https:// images are downloaded first. Local image files are read directly:
  *     relative paths resolve from the Markdown file's directory, /absolute paths
@@ -50,9 +44,9 @@
  *     are decoded with Node's file URL handling.
  *   - Linked HTML pages are treated as ordinary links. This script does not
  *     fetch sibling HTML pages or rewrite relative links/assets inside those
- *     pages. If a Markdown link points to appendix.html, use --preprocess
- *     --base-url so X receives a public absolute URL, and make sure that hosted
- *     HTML page itself resolves its own relative assets correctly.
+ *     pages. If a Markdown link points to appendix.html, use --base-url so X
+ *     receives a public absolute URL, and make sure that hosted HTML page
+ *     itself resolves its own relative assets correctly.
  *   - Before any API call, the script warns about links that X readers cannot
  *     resolve and image sources that --upload-images cannot read or download.
  *
@@ -90,7 +84,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn, spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const { fileURLToPath } = require("node:url");
 
 const shared = require("../src/shared.js");
@@ -161,6 +155,13 @@ const LANGUAGE_ALIASES = new Map(Object.entries({
   md: "markdown"
 }));
 
+class UserFacingError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "UserFacingError";
+  }
+}
+
 function usage() {
   return `Usage:
   node scripts/upload-x-article.js --test-draft [options]
@@ -172,20 +173,12 @@ Options:
   --test-draft                   Upload a tiny draft for API/auth validation.
   --dry-run                      Build the payload but do not call X.
   --output FILE                  Write the built payload or API response JSON.
-  --prepare-markdown             Write prepared Markdown for xPoster and do not call X.
-  --preprocess                   Prepare Markdown around parsing.
-  --base-url URL                 Base URL used to resolve relative links/images when preprocessing.
-  --h3-as-bold                   Convert H3 headings to bold paragraphs when preprocessing.
+  --prepare-markdown             Output xPoster-ready Markdown and never call X.
+  --base-url URL                 Resolve relative links/images before output or upload.
+  --h3-as-bold                   Convert H3 headings to bold paragraphs before output or upload.
   --smart-punctuation            Enable xPoster's smart punctuation parser option.
-  --plain-special-blocks         Convert code/table/tweet/divider blocks to plain text.
-  --render-special-blocks-as-images
-                                  Optional fallback: render code/non-linked tables as PNG images.
   --upload-images                Upload http(s) and local Markdown images as Article image entities.
   --skip-media                   Convert image blocks to Markdown text. Default behavior.
-  --experimental-markdown-atomics
-                                  Send code/table as data.markdown atomics. Browser-tested blank on 2026-06-29.
-  --markdown-entity-type TYPE    Entity type for --experimental-markdown-atomics. Default: link.
-  --chrome-path PATH             Chrome binary for --render-special-blocks-as-images.
   --publish                      Publish the created draft Article after creation.
   --publish-existing ARTICLE_ID  Publish an existing draft Article without creating a new draft.
   --open-draft                   Open the created draft in Chrome/default browser after creation.
@@ -211,16 +204,10 @@ function parseArgs(argv) {
     dryRun: false,
     output: "",
     prepareMarkdown: false,
-    preprocess: false,
     baseUrl: "",
     h3AsBold: false,
     smartPunctuation: false,
-    plainSpecialBlocks: false,
-    renderSpecialBlocksAsImages: false,
     skipMedia: true,
-    experimentalMarkdownAtomics: false,
-    markdownEntityType: process.env.X_ARTICLE_MARKDOWN_ENTITY_TYPE || "link",
-    chromePath: process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     publish: false,
     publishExisting: "",
     openDraft: false,
@@ -250,17 +237,11 @@ function parseArgs(argv) {
     else if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "--output" || arg === "-o") args.output = next();
     else if (arg === "--prepare-markdown") args.prepareMarkdown = true;
-    else if (arg === "--preprocess") args.preprocess = true;
     else if (arg === "--base-url") args.baseUrl = next();
     else if (arg === "--h3-as-bold") args.h3AsBold = true;
     else if (arg === "--smart-punctuation") args.smartPunctuation = true;
-    else if (arg === "--plain-special-blocks") args.plainSpecialBlocks = true;
-    else if (arg === "--render-special-blocks-as-images") args.renderSpecialBlocksAsImages = true;
     else if (arg === "--upload-images") args.skipMedia = false;
     else if (arg === "--skip-media") args.skipMedia = true;
-    else if (arg === "--experimental-markdown-atomics") args.experimentalMarkdownAtomics = true;
-    else if (arg === "--markdown-entity-type") args.markdownEntityType = next();
-    else if (arg === "--chrome-path") args.chromePath = next();
     else if (arg === "--publish") args.publish = true;
     else if (arg === "--publish-existing") args.publishExisting = next();
     else if (arg === "--open-draft") args.openDraft = true;
@@ -277,7 +258,6 @@ function parseArgs(argv) {
     else throw new Error(`Unexpected argument: ${arg}`);
   }
 
-  if (args.prepareMarkdown) args.preprocess = true;
   return args;
 }
 
@@ -367,8 +347,7 @@ function stripHtmlCommentsOutsideFences(markdown) {
   return `${stripped.trim()}\n`;
 }
 
-function maybePrepareMarkdownBeforeParse(markdown, args) {
-  if (!args.preprocess) return markdown;
+function maybePrepareMarkdownBeforeParse(markdown) {
   return stripHtmlCommentsOutsideFences(markdown);
 }
 
@@ -416,23 +395,6 @@ function rewriteMarkdownLinkTargets(value, baseUrl) {
   return String(value || "").replace(/(!?\[[^\]]*\]\()([^)]+)(\))/g, (match, prefix, target, suffix) => {
     return `${prefix}${rewriteTargetWithBase(target, base)}${suffix}`;
   });
-}
-
-function hasMarkdownLink(value) {
-  return /\[[^\]]+\]\([^)]+\)/.test(String(value || ""));
-}
-
-function tableHasMarkdownLinks(table) {
-  return [
-    ...(table.headers || []),
-    ...(table.rows || []).flat()
-  ].some(hasMarkdownLink);
-}
-
-function shouldRenderSpecialBlockAsImage(segment) {
-  if (segment.type === "code") return true;
-  if (segment.type === "table") return !tableHasMarkdownLinks(segment);
-  return false;
 }
 
 function normalizeLanguageLabel(language) {
@@ -554,8 +516,6 @@ function prepareMarkdownCell(value, args) {
 }
 
 function maybePostprocessParsed(parsed, args) {
-  if (!args.preprocess) return parsed;
-
   const segments = (parsed.segments || []).map((segment) => {
     if (segment.type === "text") {
       let next = transformInlineCodeInTextSegment(segment);
@@ -886,161 +846,6 @@ function localImageExists(source, args) {
   }
 }
 
-function htmlEscape(value) {
-  return shared.escapeHtml(String(value ?? ""));
-}
-
-function tableSegmentToHtml(table) {
-  const header = `<tr>${table.headers.map((cell) => `<th>${htmlEscape(cell)}</th>`).join("")}</tr>`;
-  const rows = table.rows
-    .map((row) => `<tr>${row.map((cell) => `<td>${htmlEscape(cell)}</td>`).join("")}</tr>`)
-    .join("");
-  return `<table>${header}${rows}</table>`;
-}
-
-function specialBlockHtml(segment) {
-  if (segment.type === "table") return tableSegmentToHtml(segment);
-  if (segment.type === "code") {
-    const language = segment.language ? `<div class="code-label">${htmlEscape(segment.language)}</div>` : "";
-    return `${language}<pre><code>${htmlEscape(segment.code || "")}</code></pre>`;
-  }
-  return `<p>${htmlEscape(segmentFallbackText(segment))}</p>`;
-}
-
-function estimateSpecialBlockImageSize(segment) {
-  const width = 1400;
-  if (segment.type === "code") {
-    const visualLines = String(segment.code || "")
-      .split("\n")
-      .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / 100)), 0);
-    return { width, height: Math.min(9000, Math.max(260, 120 + visualLines * 32)) };
-  }
-  if (segment.type === "table") {
-    const columnCount = Math.max(1, segment.headers?.length || 1);
-    const charsPerColumn = Math.max(18, Math.floor(95 / columnCount));
-    const rows = [segment.headers || [], ...(segment.rows || [])];
-    const visualRows = rows.reduce((sum, row) => {
-      const rowLines = Math.max(
-        1,
-        ...row.map((cell) => Math.ceil(String(cell || "").length / charsPerColumn))
-      );
-      return sum + rowLines;
-    }, 0);
-    return { width, height: Math.min(9000, Math.max(260, 90 + visualRows * 34)) };
-  }
-  return { width, height: 360 };
-}
-
-function renderSpecialBlockImage(segment, args, index) {
-  if (!fs.existsSync(args.chromePath)) {
-    throw new Error(`Chrome binary not found: ${args.chromePath}`);
-  }
-
-  const { width, height } = estimateSpecialBlockImageSize(segment);
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "xposter-special-"));
-  const htmlPath = path.join(tmpDir, `block-${index}.html`);
-  const pngPath = path.join(tmpDir, `block-${index}.png`);
-  const profilePath = path.join(tmpDir, "chrome-profile");
-  const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #ffffff;
-      color: #111827;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    .frame {
-      width: ${width}px;
-      min-height: ${height}px;
-      padding: 36px;
-      background: #ffffff;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      font-size: 22px;
-      line-height: 1.38;
-    }
-    th, td {
-      border: 2px solid #d1d5db;
-      padding: 16px 18px;
-      text-align: left;
-      vertical-align: top;
-      overflow-wrap: anywhere;
-    }
-    th {
-      background: #f3f4f6;
-      font-weight: 700;
-    }
-    tr:nth-child(odd) td {
-      background: #fafafa;
-    }
-    .code-label {
-      display: inline-block;
-      margin-bottom: 12px;
-      padding: 6px 12px;
-      border-radius: 6px;
-      background: #e5e7eb;
-      color: #374151;
-      font: 600 18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    }
-    pre {
-      margin: 0;
-      padding: 24px;
-      border-radius: 8px;
-      background: #111827;
-      color: #f9fafb;
-      font: 22px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-  </style>
-</head>
-<body><div class="frame">${specialBlockHtml(segment)}</div></body>
-</html>`;
-
-  fs.writeFileSync(htmlPath, html);
-  fs.mkdirSync(profilePath);
-  const result = spawnSync(
-    args.chromePath,
-    [
-      "--headless=new",
-      "--disable-gpu",
-      "--no-first-run",
-      "--disable-background-networking",
-      "--hide-scrollbars",
-      `--user-data-dir=${profilePath}`,
-      `--screenshot=${pngPath}`,
-      `--window-size=${width},${height}`,
-      `file://${htmlPath}`
-    ],
-    { encoding: "utf8", maxBuffer: 1024 * 1024, timeout: 20000, killSignal: "SIGKILL" }
-  );
-  if (result.error && !(result.error.code === "ETIMEDOUT" && fs.existsSync(pngPath))) throw result.error;
-  if (result.status !== 0 || !fs.existsSync(pngPath)) {
-    if (result.error?.code === "ETIMEDOUT" && fs.existsSync(pngPath)) {
-      // Chrome can leave a valid screenshot while failing to exit in headless
-      // mode on macOS. The timeout kills the browser; the PNG is still usable.
-    } else {
-    throw new Error(`Chrome screenshot failed: ${result.stderr || result.stdout || `exit ${result.status}`}`);
-    }
-  }
-
-  const buffer = fs.readFileSync(pngPath);
-  return {
-    buffer,
-    base64: buffer.toString("base64"),
-    mime: "image/png",
-    fileName: `xposter-${segment.type}-${index}.png`,
-    source: `rendered:${segment.type}:${index}`
-  };
-}
-
 function plainTextSegment(text, kind = "unstyled") {
   return {
     type: "text",
@@ -1051,61 +856,6 @@ function plainTextSegment(text, kind = "unstyled") {
   };
 }
 
-function appendTextSegment(left, right, separator = "") {
-  const offset = String(left.text || "").length + String(separator || "").length;
-  return {
-    ...left,
-    text: `${left.text || ""}${separator || ""}${right.text || ""}`,
-    inlineStyleRanges: [
-      ...(left.inlineStyleRanges || []),
-      ...(right.inlineStyleRanges || []).map((range) => ({ ...range, offset: range.offset + offset }))
-    ],
-    links: [
-      ...(left.links || []),
-      ...(right.links || []).map((link) => ({ ...link, offset: link.offset + offset }))
-    ]
-  };
-}
-
-function inlineMarkdownToTextSegment(value) {
-  const parsed = shared.parseMarkdown(String(value || ""), {
-    extractTitle: false,
-    extractCover: false
-  });
-  const textSegments = (parsed.segments || []).filter((segment) => segment.type === "text");
-  if (!textSegments.length) return plainTextSegment(String(value || ""));
-
-  let output = plainTextSegment("");
-  for (const segment of textSegments) {
-    output = appendTextSegment(output, segment, output.text ? " " : "");
-  }
-  return output;
-}
-
-function tableRowToTextSegment(cells) {
-  let output = plainTextSegment("");
-  for (let index = 0; index < cells.length; index += 1) {
-    const cell = inlineMarkdownToTextSegment(cells[index]);
-    output = appendTextSegment(output, cell, index ? " | " : "");
-  }
-  return output;
-}
-
-function tableToPlainTextSegments(table) {
-  const segments = [];
-  segments.push(tableRowToTextSegment(table.headers || []));
-  if (table.alignments?.length) {
-    segments.push(plainTextSegment(table.alignments.map(() => "---").join(" | ")));
-  }
-  for (const row of table.rows || []) segments.push(tableRowToTextSegment(row));
-  return segments;
-}
-
-function apiFallbackSegmentsForSpecialBlock(segment) {
-  if (segment.type === "table") return tableToPlainTextSegments(segment);
-  return [plainTextSegment(segmentFallbackText(segment))];
-}
-
 function segmentFallbackText(segment) {
   if (segment.type === "code") return `\`\`\`${segment.language || ""}\n${segment.code || ""}\n\`\`\``;
   if (segment.type === "table") return tableToMarkdown(segment);
@@ -1113,6 +863,28 @@ function segmentFallbackText(segment) {
   if (segment.type === "divider") return "---";
   if (segment.type === "image") return imageFallbackMarkdown(segment);
   return "";
+}
+
+function apiUnsupportedBlockSummary(parsed) {
+  const counts = new Map();
+  for (const segment of parsed.segments || []) {
+    if (segment.type === "code" || segment.type === "table") {
+      counts.set(segment.type, (counts.get(segment.type) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([type, count]) => `${count} ${type}${count === 1 ? "" : "s"}`);
+}
+
+function assertApiUploadable(parsed) {
+  const unsupported = apiUnsupportedBlockSummary(parsed);
+  if (!unsupported.length) return;
+  throw new UserFacingError(
+    `Refusing to create an X Article API draft with Markdown ${unsupported.join(" and ")}. ` +
+      "Browser testing showed X renders data.markdown table/code blocks as blank, " +
+      "and plain-text fallbacks are not useful. Use --prepare-markdown with the xPoster extension flow instead."
+  );
 }
 
 function contentStateFromSegments(segments, options = {}) {
@@ -1144,34 +916,8 @@ function contentStateFromSegments(segments, options = {}) {
       continue;
     }
 
-    if (options.plainSpecialBlocks) {
-      addText(plainTextSegment(segmentFallbackText(segment)));
-      continue;
-    }
-
-    const specialBlockUpload = options.specialBlockUploads?.get(segment);
-    if ((segment.type === "code" || segment.type === "table") && specialBlockUpload?.media_id) {
-      const data = {
-        media_items: [
-          {
-            media_category: specialBlockUpload.article_media_category || "TWEET_IMAGE",
-            media_id: String(specialBlockUpload.media_id)
-          }
-        ]
-      };
-      addAtomic("image", data);
-      continue;
-    }
-
     if (segment.type === "code" || segment.type === "table") {
-      if (options.experimentalMarkdownAtomics) {
-        addAtomic(options.markdownEntityType, {
-          markdown: segment.type === "code" ? codeFenceMarkdown(segment) : tableToMarkdown(segment)
-        });
-      } else {
-        for (const fallbackSegment of apiFallbackSegmentsForSpecialBlock(segment)) addText(fallbackSegment);
-      }
-      continue;
+      throw new Error(`Unexpected unsupported ${segment.type} block in API payload builder`);
     }
     if (segment.type === "tweet") {
       const postId = String(segment.tweetId || "");
@@ -1213,16 +959,12 @@ function parseArticleMarkdown(markdown, args) {
   });
 }
 
-function buildPayloadFromParsed(parsed, args, imageUploads = new Map(), specialBlockUploads = new Map()) {
+function buildPayloadFromParsed(parsed, args, imageUploads = new Map()) {
   const title = args.title || parsed.title || "Untitled Article";
   return {
     title,
     content_state: contentStateFromSegments(parsed.segments, {
-      plainSpecialBlocks: args.plainSpecialBlocks,
-      experimentalMarkdownAtomics: args.experimentalMarkdownAtomics,
-      markdownEntityType: args.markdownEntityType,
-      imageUploads,
-      specialBlockUploads
+      imageUploads
     })
   };
 }
@@ -1352,21 +1094,6 @@ async function uploadImagesForParsed(parsed, args, accessToken) {
   return uploads;
 }
 
-async function uploadRenderedSpecialBlocksForParsed(parsed, args, accessToken) {
-  const uploads = new Map();
-  if (!args.renderSpecialBlocksAsImages) return uploads;
-
-  let index = 1;
-  for (const segment of parsed.segments || []) {
-    if (!shouldRenderSpecialBlockAsImage(segment)) continue;
-    const image = renderSpecialBlockImage(segment, args, index++);
-    const uploaded = await uploadMedia(image, accessToken);
-    uploads.set(segment, uploaded);
-  }
-
-  return uploads;
-}
-
 function mockImageUploads(parsed) {
   const uploads = new Map();
   let index = 1;
@@ -1378,22 +1105,6 @@ function mockImageUploads(parsed) {
       source: segment.source || "",
       fileName: fileNameFromSource(segment.source || "", "image.png"),
       mime: mimeFromSource(segment.source || "")
-    });
-  }
-  return uploads;
-}
-
-function mockSpecialBlockUploads(parsed) {
-  const uploads = new Map();
-  let index = 1;
-  for (const segment of parsed.segments || []) {
-    if (!shouldRenderSpecialBlockAsImage(segment)) continue;
-    uploads.set(segment, {
-      media_id: `special-${index++}`,
-      article_media_category: "TWEET_IMAGE",
-      source: `rendered:${segment.type}`,
-      fileName: `xposter-${segment.type}.png`,
-      mime: "image/png"
     });
   }
   return uploads;
@@ -1671,36 +1382,14 @@ function localTargetReason(target) {
 function warnArticleInputs(parsed, args) {
   const warnings = [];
 
-  if (args.baseUrl && !args.preprocess) {
-    warnings.push("--base-url was supplied without --preprocess, so relative Markdown links/images will not be rewritten.");
-  }
-
-  let linkedTableCount = 0;
-  let apiTextSpecialCount = 0;
-  let apiExperimentalMarkdownAtomicCount = 0;
   for (const segment of parsed.segments || []) {
-    if (segment.type === "table") {
-      if (tableHasMarkdownLinks(segment)) linkedTableCount += 1;
-    }
-
-    if (segment.type === "code" || segment.type === "table") {
-      if (args.experimentalMarkdownAtomics) {
-        apiExperimentalMarkdownAtomicCount += 1;
-      } else if (
-        !args.plainSpecialBlocks &&
-        !(args.renderSpecialBlocksAsImages && shouldRenderSpecialBlockAsImage(segment))
-      ) {
-        apiTextSpecialCount += 1;
-      }
-    }
-
     if (segment.type === "text") {
       for (const link of segment.links || []) {
         const reason = localTargetReason(link.url);
         if (reason) {
           warnings.push(
             `link target ${JSON.stringify(link.url)}${linkContext(segment)} is a ${reason}; ` +
-              "X readers cannot resolve local/relative targets. Use --preprocess --base-url or make the link absolute."
+              "X readers cannot resolve local/relative targets. Use --base-url or make the link absolute."
           );
         }
       }
@@ -1723,26 +1412,6 @@ function warnArticleInputs(parsed, args) {
     }
   }
 
-  if (linkedTableCount && args.renderSpecialBlocksAsImages) {
-    warnings.push(
-      `${linkedTableCount} linked table(s) will stay as visible text rows with link entities because rendering them as images would remove links.`
-    );
-  }
-
-  if (apiTextSpecialCount) {
-    warnings.push(
-      `${apiTextSpecialCount} code/table block(s) will be sent as visible text. ` +
-        "The public Article API accepts data.markdown entities, but browser testing on 2026-06-29 showed they render as blank blocks."
-    );
-  }
-
-  if (apiExperimentalMarkdownAtomicCount) {
-    warnings.push(
-      `${apiExperimentalMarkdownAtomicCount} code/table block(s) will use experimental data.markdown atomics. ` +
-        "Browser testing on 2026-06-29 showed this encoding renders as blank blocks in X Article preview."
-    );
-  }
-
   for (const warning of warnings) console.error(`warning: ${warning}`);
 }
 
@@ -1763,10 +1432,10 @@ async function main() {
     return;
   }
 
+  assertApiUploadable(parsed);
   warnArticleInputs(parsed, args);
   const dryRunUploads = args.skipMedia ? new Map() : mockImageUploads(parsed);
-  const dryRunSpecialUploads = args.renderSpecialBlocksAsImages ? mockSpecialBlockUploads(parsed) : new Map();
-  const payload = buildPayloadFromParsed(parsed, args, dryRunUploads, dryRunSpecialUploads);
+  const payload = buildPayloadFromParsed(parsed, args, dryRunUploads);
 
   if (args.dryRun) {
     writeJsonOrPrint(payload, args.output);
@@ -1775,8 +1444,7 @@ async function main() {
 
   const accessToken = await getAccessToken(args);
   const imageUploads = await uploadImagesForParsed(parsed, args, accessToken);
-  const specialBlockUploads = await uploadRenderedSpecialBlocksForParsed(parsed, args, accessToken);
-  const finalPayload = buildPayloadFromParsed(parsed, args, imageUploads, specialBlockUploads);
+  const finalPayload = buildPayloadFromParsed(parsed, args, imageUploads);
   const response = await createDraft(finalPayload, accessToken);
   const articleId = response?.data?.id;
   let publishResponse = null;
@@ -1789,6 +1457,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error?.stack || error?.message || String(error));
+  if (error instanceof UserFacingError) console.error(error.message);
+  else console.error(error?.stack || error?.message || String(error));
   process.exit(1);
 });
