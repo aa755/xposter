@@ -1,82 +1,57 @@
 #!/usr/bin/env node
 /*
- * Create, inspect, and optionally publish X Article drafts through the official
- * X API. The default operation is deliberately conservative: it creates a draft
- * only. Publishing requires --publish, or --publish-existing for a draft that
- * was already reviewed in the browser.
+ * Use this script in one of two ways.
  *
- * Typical workflows:
- *   X_CLIENT_ID=... node scripts/upload-x-article.js --test-draft
- *   node scripts/upload-x-article.js article.md \
- *     --prepare-markdown \
- *     --base-url https://example.com/blog/post/ \
- *     --output article.xposter.md
- *   node scripts/upload-x-article.js article.md --dry-run --output payload.json
- *   node scripts/upload-x-article.js article.md \
- *     --base-url https://example.com/blog/post/ \
- *     --upload-images \
- *     --open-draft
- *   node scripts/upload-x-article.js article.md \
- *     --base-url https://example.com/blog/post/ \
- *     --upload-images \
- *     --publish
+ * 1. Prepare an article for xPoster import. This is the main path for real
+ *    articles, especially articles with tables, fenced code blocks, or
+ *    formatting that X's public Article API cannot represent well.
  *
- * Markdown and formatting:
- *   - The script parses Markdown through xPoster's shared parser and converts
- *     it into X's Draft.js-shaped Article payload.
- *   - Browser-tested API limitation: on 2026-06-29, X accepted Article
- *     entities with data.markdown, but the X Article editor/preview rendered
- *     those table/code atomics as blank blocks. The API uploader therefore
- *     refuses Markdown table/code blocks instead of degrading them to plain
- *     text.
- *   - Markdown cleanup is always applied before output or upload: HTML comments
- *     are stripped, fence language aliases such as c++ are normalized to cpp,
- *     inline code spans become Unicode monospace text, and --base-url can make
- *     Markdown links/images absolute.
+ *      node scripts/upload-x-article.js article.md \
+ *        --prepare-for-xposter \
+ *        --base-url https://example.com/blog/post/ \
+ *        --output article.xposter.md
  *
- * Assets and links:
- *   - --base-url rewrites relative Markdown links and image sources in the
- *     input document to absolute URLs.
+ *    This mode never contacts X. It writes Markdown that can be loaded directly
+ *    into the xPoster extension or copied to the clipboard. During preparation, the
+ *    script removes HTML comments, normalizes fence labels such as c++ to cpp,
+ *    converts inline code to Unicode monospace text, and can make relative
+ *    links/images absolute with --base-url.
+ *
+ * 2. Create an X Article draft through the official X API. This is useful for
+ *    articles without tables and code blocks, which seem unsupported by the X API.
+ *    By default it creates a draft only;
+ *    publishing requires --publish or --publish-existing.
+ *
+ *      node scripts/upload-x-article.js article.md \
+ *        --base-url https://example.com/blog/post/ \
+ *        --upload-images \
+ *        --open-draft
+ *
+ *    API upload refuses Markdown tables and fenced code blocks instead of
+ *    silently creating a bad draft. Use --prepare-for-xposter for those posts.
+ *
+ * Link and image behavior:
+ *   - --base-url rewrites relative Markdown links and image sources to public
+ *     absolute URLs. It does not fetch linked HTML pages or rewrite assets
+ *     inside those pages.
  *   - --upload-images uploads Markdown image sources by bytes. http:// and
  *     https:// images are downloaded first. Local image files are read directly:
  *     relative paths resolve from the Markdown file's directory, /absolute paths
  *     are used as-is, ~/ paths resolve from the home directory, and file:// URLs
  *     are decoded with Node's file URL handling.
- *   - Linked HTML pages are treated as ordinary links. This script does not
- *     fetch sibling HTML pages or rewrite relative links/assets inside those
- *     pages. If a Markdown link points to appendix.html, use --base-url so X
- *     receives a public absolute URL, and make sure that hosted HTML page
- *     itself resolves its own relative assets correctly.
- *   - Before any API call, the script warns about links that X readers cannot
- *     resolve and image sources that --upload-images cannot read or download.
  *
- * Authentication:
- *   - Tested setup: go to https://developer.x.com/, create a project/app if you
- *     do not already have one, and add API credits/billing. In the session that
- *     produced this script, Article API calls did not work until paid credits
- *     were added.
- *   - In the app's user-auth settings, enable OAuth 2.0 with write-capable
- *     permissions. Add this callback/redirect URL exactly:
+ * X API authentication:
+ *   - Go to https://developer.x.com/, create a project/app, and add API credits.
+ *   - In the app's user-auth settings, enable OAuth 2.0 with write permissions
+ *     and add this callback URL:
  *       http://127.0.0.1:8765/callback
- *     You normally should not change it. Only pick another localhost URL if
- *     port 8765 is already in use, and then pass the same value to this script
- *     with --redirect-uri.
- *   - Get the app's OAuth2 Client ID from the Developer Portal app settings and
- *     pass it as --client-id, X_CLIENT_ID, or TWITTER_CLIENT_ID. The script will
- *     open the browser for approval, then cache the access/refresh tokens at
- *     ~/.config/xposter/x-oauth-token.json by default.
- *   - Reuse path: after the tested OAuth flow has cached tokens, rerun the
- *     script without --client-id. It reads the cache and refreshes the access
- *     token when needed.
- *   - Untested escape hatch: X_BEARER_TOKEN or TWITTER_BEARER_TOKEN may be set
- *     to an existing user OAuth access token with the required scopes. This is
- *     intentionally not an app-only bearer token.
- *   - Untested optional path: X_CLIENT_SECRET or TWITTER_CLIENT_SECRET may be
- *     supplied for a confidential OAuth client.
+ *   - Pass the OAuth2 Client ID as --client-id, X_CLIENT_ID, or
+ *     TWITTER_CLIENT_ID. The script opens the browser for approval and caches
+ *     tokens at ~/.config/xposter/x-oauth-token.json.
  *
- * API calls:
- *   - Create draft: POST https://api.x.com/2/articles/draft
- *   - Publish:      POST https://api.x.com/2/articles/{article_id}/publish
+ * Developer note: browser testing on 2026-06-29 showed that X accepts
+ * data.markdown Article entities but renders table/code atomics as blank blocks
+ * in the editor/preview.
  */
 
 const crypto = require("node:crypto");
@@ -173,7 +148,7 @@ Options:
   --test-draft                   Upload a tiny draft for API/auth validation.
   --dry-run                      Build the payload but do not call X.
   --output FILE                  Write the built payload or API response JSON.
-  --prepare-markdown             Output xPoster-ready Markdown and never call X.
+  --prepare-for-xposter          Output Markdown for xPoster and never call X.
   --base-url URL                 Resolve relative links/images before output or upload.
   --h3-as-bold                   Convert H3 headings to bold paragraphs before output or upload.
   --smart-punctuation            Enable xPoster's smart punctuation parser option.
@@ -203,7 +178,7 @@ function parseArgs(argv) {
     testDraft: false,
     dryRun: false,
     output: "",
-    prepareMarkdown: false,
+    prepareForXposter: false,
     baseUrl: "",
     h3AsBold: false,
     smartPunctuation: false,
@@ -236,7 +211,7 @@ function parseArgs(argv) {
     else if (arg === "--test-draft") args.testDraft = true;
     else if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "--output" || arg === "-o") args.output = next();
-    else if (arg === "--prepare-markdown") args.prepareMarkdown = true;
+    else if (arg === "--prepare-for-xposter") args.prepareForXposter = true;
     else if (arg === "--base-url") args.baseUrl = next();
     else if (arg === "--h3-as-bold") args.h3AsBold = true;
     else if (arg === "--smart-punctuation") args.smartPunctuation = true;
@@ -511,7 +486,7 @@ function convertMarkdownInlineCodeText(value) {
   return transformInlineCodeInTextSegment(segment).text;
 }
 
-function prepareMarkdownCell(value, args) {
+function prepareCellForXposter(value, args) {
   return rewriteMarkdownLinkTargets(convertMarkdownInlineCodeText(value), args.baseUrl);
 }
 
@@ -551,8 +526,8 @@ function maybePostprocessParsed(parsed, args) {
     if (segment.type === "table") {
       return {
         ...segment,
-        headers: (segment.headers || []).map((cell) => prepareMarkdownCell(cell, args)),
-        rows: (segment.rows || []).map((row) => row.map((cell) => prepareMarkdownCell(cell, args)))
+        headers: (segment.headers || []).map((cell) => prepareCellForXposter(cell, args)),
+        rows: (segment.rows || []).map((row) => row.map((cell) => prepareCellForXposter(cell, args)))
       };
     }
 
@@ -883,7 +858,7 @@ function assertApiUploadable(parsed) {
   throw new UserFacingError(
     `Refusing to create an X Article API draft with Markdown ${unsupported.join(" and ")}. ` +
       "Browser testing showed X renders data.markdown table/code blocks as blank, " +
-      "and plain-text fallbacks are not useful. Use --prepare-markdown with the xPoster extension flow instead."
+      "and plain-text fallbacks are not useful. Use --prepare-for-xposter with the xPoster extension flow instead."
   );
 }
 
@@ -1427,7 +1402,7 @@ async function main() {
 
   const markdown = maybePrepareMarkdownBeforeParse(readInputMarkdown(args), args);
   const parsed = maybePostprocessParsed(parseArticleMarkdown(markdown, args), args);
-  if (args.prepareMarkdown) {
+  if (args.prepareForXposter) {
     writeTextOrPrint(preparedMarkdownFromParsed(parsed, args), args.output);
     return;
   }

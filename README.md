@@ -134,14 +134,14 @@ In this example, xPoster can use the frontmatter title, try the cover image, upl
 
 A smoke-test draft is included at [fixtures/live-x-smoke.md](fixtures/live-x-smoke.md).
 
-## Prepare Markdown Without The X API
+## Prepare An Article For xPoster
 
-If you want to use the Chrome extension flow but clean up Markdown first, run
-the local preparation mode:
+Use this mode when you want xPoster to import the article in Chrome instead of
+using the X API:
 
 ```bash
 node scripts/upload-x-article.js article.md \
-  --prepare-markdown \
+  --prepare-for-xposter \
   --base-url https://example.com/blog/post/ \
   --output article.xposter.md
 ```
@@ -157,11 +157,11 @@ Useful options:
 - `--h3-as-bold`: converts third-level headings to bold paragraphs for X
   Article rendering.
 
-Omit `--output` to print the prepared Markdown to stdout. On macOS, you can copy
-it directly with:
+Omit `--output` to print the xPoster-ready Markdown to stdout. On macOS, you can
+copy it directly with:
 
 ```bash
-node scripts/upload-x-article.js article.md --prepare-markdown | pbcopy
+node scripts/upload-x-article.js article.md --prepare-for-xposter | pbcopy
 ```
 
 ## X Article API Uploader
@@ -173,7 +173,7 @@ The API accepts Draft.js-shaped `content_state`, but browser testing on
 API and then render as blank blocks in X Article preview. The uploader therefore
 refuses Markdown table and fenced-code blocks instead of creating a degraded
 draft. For table/code-heavy articles, use the Chrome extension flow with
-`--prepare-markdown`.
+`--prepare-for-xposter`.
 
 ## Images
 
